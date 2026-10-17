@@ -4,8 +4,8 @@
 
 A pi package containing the Sassywares extensions and the Sassy subagent roster.
 
-- Local: `~/Documents/Workspace/Sassywares/pi-extensions`
-- Remote: `sassywares/pi-extensions`
+- Local: `~/Documents/Workspace/Sassywares/sassy-pi-extensions`
+- Remote: `sassywares/sassy-pi-extensions`
 - Package: `@sassywares/pi-extensions`
 
 This repo is the source of truth. Do not keep separate copies under `~/.pi/agent/extensions/`; pi would load both and register duplicate tools and commands. Agents are linked from `~/.pi/agent/agents/` to `agents/` by `scripts/install-agents.sh`.
@@ -13,7 +13,7 @@ This repo is the source of truth. Do not keep separate copies under `~/.pi/agent
 ## Layout
 
 ```text
-pi-extensions/
+sassy-pi-extensions/
 ├── extensions/
 │   ├── auto-title.ts
 │   ├── handoff.ts
@@ -25,6 +25,8 @@ pi-extensions/
 │   └── *.md
 ├── scripts/
 │   └── install-agents.sh
+├── .github/workflows/
+│   └── publish.yml
 ├── AGENTS.md
 ├── CONCEPTS.md
 ├── LICENSE
@@ -41,6 +43,7 @@ pi-extensions/
 | `extensions/subagent/` | The `subagent` tool and its agent discovery. |
 | `agents/*.md` | Sassy subagent definitions. Linked into `~/.pi/agent/agents/`. |
 | `scripts/install-agents.sh` | Symlinks `agents/*.md` into the user agent directory. |
+| `.github/workflows/publish.yml` | Publishes to npm when a `v*` tag is pushed. |
 | `package.json` | Pi package manifest. Lists the extensions under `pi.extensions`. |
 
 ## How to run
@@ -49,7 +52,7 @@ Install the working tree as a local package and link the agents:
 
 ```bash
 ./scripts/install-agents.sh
-pi install ~/Documents/Workspace/Sassywares/pi-extensions
+pi install ~/Documents/Workspace/Sassywares/sassy-pi-extensions
 ```
 
 Local installs are read in place. After an extension edit, run `/reload` in pi. Agent edits are read on the next subagent invocation.
@@ -57,7 +60,7 @@ Local installs are read in place. After an extension edit, run `/reload` in pi. 
 One-off load without changing settings:
 
 ```bash
-pi -e ~/Documents/Workspace/Sassywares/pi-extensions
+pi -e ~/Documents/Workspace/Sassywares/sassy-pi-extensions
 ```
 
 ## Adding an extension
@@ -85,7 +88,7 @@ pi -e ~/Documents/Workspace/Sassywares/pi-extensions
 
 There is no test runner. Verify manually:
 
-- `pi -e ~/Documents/Workspace/Sassywares/pi-extensions` loads without errors.
+- `pi -e ~/Documents/Workspace/Sassywares/sassy-pi-extensions` loads without errors.
 - `web_search` works with and without `EXA_API_KEY`.
 - `web_fetch` returns page text, and rejects `http://localhost:3000` and private IPs.
 - `/title`, `/title <text>`, automatic naming, and `PI_AUTO_TITLE=0`.
@@ -101,3 +104,14 @@ There is no test runner. Verify manually:
 - **Small surface.** Prefer one clear tool or command per extension. Document every environment variable.
 - **Fail closed.** Network tools must keep blocking localhost, private addresses, and credential-bearing URLs.
 - **Attribute upstream.** `handoff` and `subagent` are derived from pi. Keep `NOTICE` current when they change.
+
+## Publishing
+
+Pushing a `v*` tag runs `.github/workflows/publish.yml`. The workflow checks that the tag matches `package.json` and publishes with provenance using the `NPM_TOKEN` secret.
+
+Release checklist:
+
+1. Bump `version` in `package.json`.
+2. Commit and push `main`.
+3. Tag and push: `git tag -a v0.3.0 -m v0.3.0 && git push origin v0.3.0`.
+4. Watch the Publish workflow under the repo's Actions tab.

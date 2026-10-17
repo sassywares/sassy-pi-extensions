@@ -1,8 +1,26 @@
-# Pi Extensions
+# Sassy Pi Extensions
 
-**Automatic session titles, zero-config web access, session handoff, and isolated subagents for [pi](https://github.com/earendil-works/pi).**
+**A zesty power pack for pi — auto-titled sessions, real web access, clean handoffs, and isolated subagents. Install once, ship faster.**
 
-Pi Extensions is the Sassywares pi suite. It names each session from its first real turn, gives the agent `web_search` and `web_fetch` tools backed by Exa, carries context into a fresh session with `/handoff`, and runs bounded work in isolated subagents.
+Sassy Pi Extensions is the Sassywares pi suite. It names each session from its first real turn, gives the agent `web_search` and `web_fetch` tools backed by Exa, carries context into a fresh session with `/handoff`, and runs bounded work in isolated subagents.
+
+The package is `@sassywares/pi-extensions`; the repo is `sassy-pi-extensions`.
+
+## Contents
+
+- [Why this suite](#why-this-suite)
+- [Quick start](#quick-start)
+- [Extensions](#extensions)
+  - [Auto-title](#auto-title)
+  - [Web search and fetch](#web-search-and-fetch)
+  - [Handoff](#handoff)
+  - [Subagent](#subagent)
+- [Configuration](#configuration)
+- [Security](#security)
+- [Provenance](#provenance)
+- [Repository layout](#repository-layout)
+- [Development](#development)
+- [Repository maintenance](#repository-maintenance)
 
 ## Why this suite
 
@@ -18,21 +36,21 @@ Pi Extensions is the Sassywares pi suite. It names each session from its first r
 From a checkout (recommended — this also installs the agent definitions):
 
 ```bash
-git clone https://github.com/sassywares/pi-extensions.git
-./pi-extensions/scripts/install-agents.sh
-pi install ./pi-extensions
+git clone https://github.com/sassywares/sassy-pi-extensions.git
+./sassy-pi-extensions/scripts/install-agents.sh
+pi install ./sassy-pi-extensions
 ```
 
 Or install the package only:
 
 ```bash
-pi install git:github.com/sassywares/pi-extensions@v0.2.0
+pi install git:github.com/sassywares/sassy-pi-extensions@v0.3.0
 ```
 
 Or from npm once published:
 
 ```bash
-pi install npm:@sassywares/pi-extensions@0.2.0
+pi install npm:@sassywares/pi-extensions@0.3.0
 ```
 
 A package-only install loads the extensions, but `subagent` has no agents until you link or copy some into `~/.pi/agent/agents/`. Run `scripts/install-agents.sh` from a checkout to link the Sassy roster.
@@ -47,7 +65,7 @@ Reload pi (`/reload`) and confirm:
 To try the package without changing settings:
 
 ```bash
-pi -e ./pi-extensions
+pi -e ./sassy-pi-extensions
 ```
 
 ## Extensions
@@ -138,7 +156,7 @@ Extensions run inside the pi process with the same OS permissions as pi. Review 
 ## Repository layout
 
 ```text
-pi-extensions/
+sassy-pi-extensions/
 ├── extensions/
 │   ├── auto-title.ts
 │   ├── handoff.ts
@@ -150,6 +168,8 @@ pi-extensions/
 │   └── *.md
 ├── scripts/
 │   └── install-agents.sh
+├── .github/workflows/
+│   └── publish.yml
 ├── AGENTS.md
 ├── CONCEPTS.md
 ├── LICENSE
@@ -164,7 +184,7 @@ This repo is the source of truth for the extensions and the Sassy agents. Instal
 
 ```bash
 ./scripts/install-agents.sh
-pi install ~/Documents/Workspace/Sassywares/pi-extensions
+pi install ~/Documents/Workspace/Sassywares/sassy-pi-extensions
 ```
 
 Local installs are read in place — no copy, no build step. After changing an extension, run `/reload` in pi. Agent edits are picked up on the next subagent invocation.
@@ -174,7 +194,7 @@ Do not also keep copies under `~/.pi/agent/extensions/`; pi would load both and 
 Test the package for one invocation without touching settings:
 
 ```bash
-pi -e ~/Documents/Workspace/Sassywares/pi-extensions
+pi -e ~/Documents/Workspace/Sassywares/sassy-pi-extensions
 ```
 
 Manual checks after a change:
@@ -189,7 +209,7 @@ Manual checks after a change:
 ## Repository maintenance
 
 - Commit changes under `extensions/` and `agents/`, and update `README.md` when behavior or configuration changes.
-- Tag releases (`v0.2.0`, `v0.2.1`, …) so installs can pin a ref.
-- For npm, bump `version` and run `npm publish --access public`.
+- Tag releases (`v0.3.0`, `v0.3.1`, …) so installs can pin a ref. Pushing a `v*` tag publishes to npm via GitHub Actions.
+- Bump `version` in `package.json` to match the tag before pushing it.
 - `AGENTS.md` documents the workflow for agents working on this repo.
 - `CONCEPTS.md` holds the vocabulary.

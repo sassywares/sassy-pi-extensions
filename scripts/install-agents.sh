@@ -6,7 +6,7 @@ AGENTS_DIR="$REPO/agents"
 TARGET="${PI_AGENTS_DIR:-${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/agents}"
 
 if [ ! -d "$AGENTS_DIR" ]; then
-  echo "pi-extensions: $AGENTS_DIR does not exist" >&2
+  echo "sassy-pi-extensions: $AGENTS_DIR does not exist" >&2
   exit 1
 fi
 
@@ -28,7 +28,7 @@ for src in "$AGENTS_DIR"/*.md; do
       rm "$dest"
       ln -s "$src" "$dest"
     else
-      echo "pi-extensions: skipping $dest (exists and differs)" >&2
+      echo "sassy-pi-extensions: skipping $dest (exists and differs)" >&2
     fi
     continue
   fi
@@ -36,4 +36,4 @@ for src in "$AGENTS_DIR"/*.md; do
   ln -s "$src" "$dest"
 done
 
-echo "pi-extensions: agents linked into $TARGET"
+echo "sassy-pi-extensions: agents linked into $TARGET"

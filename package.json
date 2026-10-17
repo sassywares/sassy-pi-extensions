@@ -1,17 +1,17 @@
 {
   "name": "@sassywares/pi-extensions",
-  "version": "0.2.0",
-  "description": "Sassywares pi extensions: session titles, web search and fetch, session handoff, and isolated subagents.",
+  "version": "0.3.0",
+  "description": "A zesty power pack for pi: auto-titled sessions, real web access, clean handoffs, and isolated subagents.",
   "type": "module",
   "license": "MIT",
   "author": "Sassywares",
-  "homepage": "https://github.com/sassywares/pi-extensions#readme",
+  "homepage": "https://github.com/sassywares/sassy-pi-extensions#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sassywares/pi-extensions.git"
+    "url": "git+https://github.com/sassywares/sassy-pi-extensions.git"
   },
   "bugs": {
-    "url": "https://github.com/sassywares/pi-extensions/issues"
+    "url": "https://github.com/sassywares/sassy-pi-extensions/issues"
   },
   "keywords": [
     "pi-package",
@@ -30,6 +30,9 @@
     "NOTICE",
     "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
     "typebox": "*"
