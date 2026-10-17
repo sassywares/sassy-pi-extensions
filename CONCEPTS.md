@@ -2,11 +2,11 @@
 
 ## Package
 
-A pi package is an ordinary directory or npm package with a `package.json`. Pi reads the `pi` manifest and loads the resources it names. This repo exposes only extensions. The `pi-package` keyword makes it eligible for the pi.dev gallery.
+A pi package is an ordinary directory or npm package with a `package.json`. Pi reads the `pi` manifest and loads the resources it names. This repo exposes extensions. The `pi-package` keyword makes it eligible for the pi.dev gallery.
 
 ## Extension
 
-A TypeScript module with a default export that receives `ExtensionAPI`. Pi loads it inside the pi process. An extension can register tools, commands, event handlers, providers, and UI. Here, each file in `extensions/` is one extension.
+A TypeScript module with a default export that receives `ExtensionAPI`. Pi loads it inside the pi process. An extension can register tools, commands, event handlers, providers, and UI. Here, each file under `extensions/` is one extension; `subagent/` is a directory with an `index.ts` entry point.
 
 ## Host-provided dependency
 
@@ -35,3 +35,23 @@ The `web_fetch` rule set that refuses localhost, private and link-local addresse
 ## Readable text
 
 What `web_fetch` returns: HTML converted to plain text with the title extracted, or plain text normalized. Responses are capped at 2 MB and truncated to the requested character limit.
+
+## Handoff
+
+The `handoff` extension. `/handoff <goal>` asks the current model for a self-contained continuation prompt, lets the user edit it, and opens a new session with it in the editor. `/handoff mode:auto <goal>` sends it immediately. Session replacement is command-only in pi, which is why handoff is a command rather than a tool.
+
+## Subagent
+
+The `subagent` tool. It spawns a separate `pi` process per task so each task gets an isolated context window, then returns compact output. Modes are single, parallel, and chain. A chain replaces `{previous}` with the prior task's result.
+
+## Agent
+
+A Markdown file with `name` and `description` frontmatter, plus optional `tools`, `model`, and `thinking`. The body is the system prompt. Agents are discovered from `~/.pi/agent/agents/` and the nearest project `.pi/agents/`. Project agents take precedence over user agents with the same name.
+
+## Agent scope
+
+Where the `subagent` tool looks for agents: `user`, `project`, or `both`. Default is `both`. The Sassy roster is user-scoped, linked from this repo's `agents/` directory.
+
+## Upstream derivation
+
+`handoff` and `subagent` are modified versions of pi's MIT-licensed examples and documentation. `NOTICE` records the attribution; `LICENSE` covers this repository.

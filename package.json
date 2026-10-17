@@ -1,7 +1,7 @@
 {
   "name": "@sassywares/pi-extensions",
-  "version": "0.1.0",
-  "description": "Custom pi extensions: automatic session titles and Exa-powered web search and fetch.",
+  "version": "0.2.0",
+  "description": "Sassywares pi extensions: session titles, web search and fetch, session handoff, and isolated subagents.",
   "type": "module",
   "license": "MIT",
   "author": "Sassywares",
@@ -18,11 +18,16 @@
     "pi",
     "pi-extension",
     "auto-title",
-    "web-search"
+    "web-search",
+    "handoff",
+    "subagent"
   ],
   "files": [
     "extensions",
+    "agents",
+    "scripts",
     "README.md",
+    "NOTICE",
     "LICENSE"
   ],
   "peerDependencies": {
@@ -32,7 +37,9 @@
   "pi": {
     "extensions": [
       "./extensions/auto-title.ts",
-      "./extensions/web-search.ts"
+      "./extensions/web-search.ts",
+      "./extensions/handoff.ts",
+      "./extensions/subagent/index.ts"
     ]
   }
 }

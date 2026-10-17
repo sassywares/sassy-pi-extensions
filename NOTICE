@@ -1,0 +1,10 @@
+# Notice
+
+`extensions/handoff.ts`, `extensions/subagent/`, and the agent definitions in
+`agents/` are derived from the examples and documentation of
+[pi](https://github.com/earendil-works/pi), Copyright (c) Mario Zechner and
+contributors, licensed under the MIT License.
+
+They have been modified for the Sassywares workflow: `/handoff mode:auto`, the
+Sassy agent roster, and local behavior changes. See `LICENSE` for the license
+covering this repository.
