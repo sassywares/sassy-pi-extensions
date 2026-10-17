@@ -1,0 +1,37 @@
+# Pi Extensions — Concepts
+
+## Package
+
+A pi package is an ordinary directory or npm package with a `package.json`. Pi reads the `pi` manifest and loads the resources it names. This repo exposes only extensions. The `pi-package` keyword makes it eligible for the pi.dev gallery.
+
+## Extension
+
+A TypeScript module with a default export that receives `ExtensionAPI`. Pi loads it inside the pi process. An extension can register tools, commands, event handlers, providers, and UI. Here, each file in `extensions/` is one extension.
+
+## Host-provided dependency
+
+A package that pi supplies to extensions at runtime: `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, `@earendil-works/pi-agent-core`, `@earendil-works/pi-tui`, and `typebox`. These belong in `peerDependencies`, never in `dependencies`.
+
+## Session name
+
+The title pi stores for a session. It appears in the session picker, the footer, and the terminal title. `/name` sets it manually; `pi.setSessionName()` sets it from an extension.
+
+## Auto-title
+
+The `auto-title` extension. After the first assistant turn with text, it generates a short title once per session and writes it as the session name. It never overwrites a manual name. `/title` regenerates; `/title <text>` sets one directly. `PI_AUTO_TITLE=0` disables the automatic pass only.
+
+## Exa MCP
+
+Exa's public, keyless search endpoint (`https://mcp.exa.ai/mcp`). The default provider for `web_search`. Free tier, shared rate limits.
+
+## Exa API
+
+Exa's direct search API (`https://api.exa.ai/search`). Used when `EXA_API_KEY` is set. Your own quota and key.
+
+## Public URL guard
+
+The `web_fetch` rule set that refuses localhost, private and link-local addresses, and URLs with embedded credentials. It checks the initial URL and every redirect target. The intent is public web pages only — not services on the user's machine or local network.
+
+## Readable text
+
+What `web_fetch` returns: HTML converted to plain text with the title extracted, or plain text normalized. Responses are capped at 2 MB and truncated to the requested character limit.

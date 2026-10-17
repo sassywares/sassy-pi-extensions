@@ -1,0 +1,38 @@
+{
+  "name": "@sassywares/pi-extensions",
+  "version": "0.1.0",
+  "description": "Custom pi extensions: automatic session titles and Exa-powered web search and fetch.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Sassywares",
+  "homepage": "https://github.com/sassywares/pi-extensions#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sassywares/pi-extensions.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sassywares/pi-extensions/issues"
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-extension",
+    "auto-title",
+    "web-search"
+  ],
+  "files": [
+    "extensions",
+    "README.md",
+    "LICENSE"
+  ],
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions/auto-title.ts",
+      "./extensions/web-search.ts"
+    ]
+  }
+}
