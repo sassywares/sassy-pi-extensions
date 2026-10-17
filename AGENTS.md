@@ -84,6 +84,28 @@ pi -e ~/Documents/Workspace/Sassywares/sassy-pi-extensions
 - To remove an agent, delete the file and its symlink under `~/.pi/agent/agents/`.
 - Do not add a build step. Pi loads TypeScript directly with jiti.
 
+## Version, commit, and push every extension change
+
+Any change under `extensions/` or `agents/`, or to the `pi` manifest in `package.json`, is a release-worthy change. In the same turn:
+
+1. Bump the patch version:
+   ```bash
+   npm version patch --no-git-tag-version
+   ```
+2. Commit everything:
+   ```bash
+   git add -A
+   git commit -m "<type>: <summary>"
+   ```
+3. Push:
+   ```bash
+   git push origin main
+   ```
+
+Do this without asking for confirmation. Do not leave extension changes uncommitted or unpushed. If any step fails, report the failure instead of continuing silently.
+
+Tag and push a `v*` tag only when the change should be published to npm. The tag triggers the OIDC workflow. See [Publishing](#publishing).
+
 ## Testing
 
 There is no test runner. Verify manually:
