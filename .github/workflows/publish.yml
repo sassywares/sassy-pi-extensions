@@ -15,13 +15,17 @@ jobs:
 
     steps:
       - name: Check out
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Update npm
+        run: npm install -g npm@latest
 
       - name: Check tag matches package version
         run: |
@@ -32,7 +36,16 @@ jobs:
             exit 1
           fi
 
+      # Allows the one-time manual bootstrap publish of a new package.
+      - name: Check if the version is already published
+        id: published
+        run: |
+          if npm view "@sassywares/pi-extensions@${GITHUB_REF_NAME#v}" version >/dev/null 2>&1; then
+            echo "already-published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already-published=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish to npm
-        run: npm publish --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        if: steps.published.outputs.already-published != 'true'
+        run: npm publish

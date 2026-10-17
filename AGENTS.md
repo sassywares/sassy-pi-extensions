@@ -107,11 +107,26 @@ There is no test runner. Verify manually:
 
 ## Publishing
 
-Pushing a `v*` tag runs `.github/workflows/publish.yml`. The workflow checks that the tag matches `package.json` and publishes with provenance using the `NPM_TOKEN` secret.
+Publishing uses npm trusted publishing (OIDC). There is no `NPM_TOKEN` secret. The workflow gets a short-lived token from GitHub Actions and npm generates provenance automatically.
+
+`.github/workflows/publish.yml` requires:
+
+- `permissions.id-token: write` and `permissions.contents: read`
+- npm CLI 11.5.1 or later (the workflow updates npm and uses Node 24)
+- a trusted publisher configured on npmjs.com for `@sassywares/pi-extensions`:
+  - organization: `sassywares`
+  - repository: `sassy-pi-extensions`
+  - workflow filename: `publish.yml`
+  - environment: blank
+  - allowed actions: allow `npm publish` (not stage-only)
+
+OIDC cannot publish the first version of a package, because the package settings page does not exist yet. Bootstrap once with a manual publish, then configure the trusted publisher.
 
 Release checklist:
 
 1. Bump `version` in `package.json`.
 2. Commit and push `main`.
-3. Tag and push: `git tag -a v0.3.0 -m v0.3.0 && git push origin v0.3.0`.
+3. Tag and push: `git tag -a v0.3.1 -m v0.3.1 && git push origin v0.3.1`.
 4. Watch the Publish workflow under the repo's Actions tab.
+
+The workflow skips publishing when the tag's version already exists on npm, so a manually published tag can be pushed safely. A new trusted publisher must complete its first OIDC publish within 2 days of being configured, or npm expires the configuration.

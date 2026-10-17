@@ -20,6 +20,7 @@ The package is `@sassywares/pi-extensions`; the repo is `sassy-pi-extensions`.
 - [Provenance](#provenance)
 - [Repository layout](#repository-layout)
 - [Development](#development)
+- [Releasing](#releasing)
 - [Repository maintenance](#repository-maintenance)
 
 ## Why this suite
@@ -206,10 +207,32 @@ Manual checks after a change:
 - `/handoff <goal>` opens an editable prompt; `/handoff mode:auto <goal>` sends it.
 - `subagent` with a single agent, and a chain using `{previous}`.
 
+## Releasing
+
+Publishing uses npm trusted publishing (OIDC). There is no long-lived npm token and no `NPM_TOKEN` secret.
+
+A brand-new package cannot publish its first version through OIDC, because npm's trusted-publisher settings only exist after the package exists. Bootstrap once:
+
+1. `npm login`, then `npm publish --access public` from a clean checkout.
+2. On npmjs.com, open the package → **Settings → Trusted publishing → GitHub Actions** and set:
+   - organization: `sassywares`
+   - repository: `sassy-pi-extensions`
+   - workflow filename: `publish.yml`
+   - environment: blank
+   - allowed actions: enable **npm publish** (do not leave it stage-only)
+3. Bump `version` in `package.json`, commit, then tag and push. The workflow publishes with OIDC and provenance.
+
+```bash
+git tag -a v0.3.1 -m v0.3.1
+git push origin v0.3.1
+```
+
+The workflow skips publishing if the tag's version is already on npm. A new trusted publisher must complete its first OIDC publish within 2 days of configuration, or npm expires it.
+
 ## Repository maintenance
 
 - Commit changes under `extensions/` and `agents/`, and update `README.md` when behavior or configuration changes.
-- Tag releases (`v0.3.0`, `v0.3.1`, …) so installs can pin a ref. Pushing a `v*` tag publishes to npm via GitHub Actions.
+- Tag releases (`v0.3.0`, `v0.3.1`, …) so installs can pin a ref. See [Releasing](#releasing).
 - Bump `version` in `package.json` to match the tag before pushing it.
 - `AGENTS.md` documents the workflow for agents working on this repo.
 - `CONCEPTS.md` holds the vocabulary.
