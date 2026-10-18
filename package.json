@@ -1,6 +1,6 @@
 {
   "name": "@sassywares/pi-extensions",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "A zesty power pack for pi: auto-titled sessions, real web access, clean handoffs, and isolated subagents.",
   "type": "module",
   "license": "MIT",

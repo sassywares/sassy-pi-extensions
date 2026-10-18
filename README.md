@@ -75,7 +75,7 @@ pi -e ./sassy-pi-extensions
 |---|---|---|
 | **`auto-title`** | automatic + `/title [text]` | Generates a short session title after the first meaningful turn. `/title` regenerates it; `/title <text>` sets one manually. |
 | **`web-search`** | `web_search`, `web_fetch` | Searches the web via Exa and fetches readable page text with local-address protection. |
-| **`handoff`** | `/handoff [mode:auto] <goal>` | Summarizes the session into a continuation prompt and opens a fresh session with it. |
+| **`handoff`** | `/handoff [mode:review|pipeline] <goal>` | Summarizes the session into a continuation prompt and opens a fresh session with it. |
 | **`subagent`** | `subagent` tool | Runs single, parallel, or chained tasks in isolated pi processes and returns compact results. |
 
 ### Auto-title
@@ -103,9 +103,9 @@ Runs after the first assistant turn that contains text. It builds a small transc
 
 ### Handoff
 
-`/handoff <goal>` generates a focused prompt for a new session, lets you edit it, then opens that session with the prompt seeded in the editor.
+`/handoff <goal>` (or `mode:review`) generates a focused prompt for a new session, lets you edit it, then opens that session with the prompt seeded in the editor.
 
-`/handoff mode:auto <goal>` skips the editor, starts the new session, and sends the prompt immediately. Skill commands inside the prompt are expanded.
+`/handoff mode:pipeline <goal>` skips the editor, starts the new session, and sends the prompt immediately. Skill commands inside the prompt are expanded.
 
 The extension uses the current session's model and the current conversation only. The new session cannot see the old one.
 
@@ -204,7 +204,7 @@ Manual checks after a change:
 - `web_fetch` on a normal page, and on `http://localhost:3000` (must be rejected).
 - `/title`, `/title <text>`, and automatic naming with `PI_AUTO_TITLE` unset.
 - `PI_AUTO_TITLE=0` starts a session without a generated title.
-- `/handoff <goal>` opens an editable prompt; `/handoff mode:auto <goal>` sends it.
+- `/handoff <goal>` or `/handoff mode:review <goal>` opens an editable prompt; `/handoff mode:pipeline <goal>` sends it.
 - `subagent` with a single agent, and a chain using `{previous}`.
 
 ## Releasing

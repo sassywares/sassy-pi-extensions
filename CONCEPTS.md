@@ -38,7 +38,7 @@ What `web_fetch` returns: HTML converted to plain text with the title extracted,
 
 ## Handoff
 
-The `handoff` extension. `/handoff <goal>` asks the current model for a self-contained continuation prompt, lets the user edit it, and opens a new session with it in the editor. `/handoff mode:auto <goal>` sends it immediately. Session replacement is command-only in pi, which is why handoff is a command rather than a tool.
+The `handoff` extension. `/handoff <goal>` (or `mode:review`) asks the current model for a self-contained continuation prompt, lets the user edit it, and opens a new session with it in the editor. `/handoff mode:pipeline <goal>` sends it immediately. Session replacement is command-only in pi, which is why handoff is a command rather than a tool.
 
 ## Subagent
 

@@ -114,7 +114,7 @@ There is no test runner. Verify manually:
 - `web_search` works with and without `EXA_API_KEY`.
 - `web_fetch` returns page text, and rejects `http://localhost:3000` and private IPs.
 - `/title`, `/title <text>`, automatic naming, and `PI_AUTO_TITLE=0`.
-- `/handoff <goal>` opens an editable prompt; `/handoff mode:auto <goal>` sends it.
+- `/handoff <goal>` or `/handoff mode:review <goal>` opens an editable prompt; `/handoff mode:pipeline <goal>` sends it.
 - `subagent` runs a single task and a chain using `{previous}`.
 
 ## Conventions
