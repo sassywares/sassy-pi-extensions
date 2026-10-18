@@ -127,7 +127,7 @@ This repo ships the Sassy roster:
 | `diagnoser` | Reproduces a bug, traces the root cause, proposes a fix. |
 | `worker` | General-purpose implementation in an isolated context. |
 | `simplifier` | Simplifies settled code without changing behavior. |
-| `reviewer` | Quality, correctness, and security review. |
+| `reviewer` | Quality, correctness, security, project-rule, and design-system review. |
 | `validator` | Checks that the work matches the plan, independent of review. |
 
 Link them with `./scripts/install-agents.sh`. Edit the frontmatter to change each agent's model, thinking level, or tool allowlist.
