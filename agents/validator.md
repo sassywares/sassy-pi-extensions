@@ -2,7 +2,7 @@
 name: validator
 description: Validates whether the implemented work matches what the plan expected, independent of code review
 tools: read, grep, find, ls, bash
-model: deepseek/deepseek-v4-pro
+model: deepseek/deepseek-flash
 thinking: high
 ---
 

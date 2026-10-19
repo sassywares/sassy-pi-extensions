@@ -2,7 +2,7 @@
 name: reviewer
 description: Code review specialist for quality, correctness, security, project-rule conformance, and design-system conformance
 tools: read, grep, find, ls, bash
-model: deepseek/deepseek-v4-pro
+model: deepseek/deepseek-flash
 thinking: high
 ---
 

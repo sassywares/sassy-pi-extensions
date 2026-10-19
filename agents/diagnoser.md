@@ -2,7 +2,7 @@
 name: diagnoser
 description: Lean bug diagnosis — reproduce a failure, trace it to root cause, and return the causal chain, fix proposal, files, tests, and risks
 tools: read, grep, find, ls, bash
-model: deepseek/deepseek-v4-pro
+model: deepseek/deepseek-flash
 thinking: high
 ---
 
