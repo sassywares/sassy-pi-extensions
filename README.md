@@ -123,14 +123,14 @@ This repo ships the Sassy roster:
 
 | Agent | Role |
 |---|---|
-| `scout` | Fast codebase recon and compressed context for other agents. |
-| `diagnoser` | Reproduces a bug, traces the root cause, proposes a fix. |
+| `scout` | Grounding scout: writes the shared grounding brief other agents read. |
 | `worker` | General-purpose implementation in an isolated context. |
-| `simplifier` | Simplifies settled code without changing behavior. |
-| `reviewer` | Quality, correctness, security, project-rule, and design-system review. |
-| `validator` | Checks that the work matches the plan, independent of review. |
+| `reviewer` | Quality, correctness, security, project-rule, and design-system review, diff-scoped. |
+| `validator` | Checks that the diff matches the plan, independent of review. |
 
 Link them with `./scripts/install-agents.sh`. Edit the frontmatter to change each agent's model, thinking level, or tool allowlist.
+
+Every subagent reads the same grounding brief instead of re-exploring the repo. See [GROUNDING.md](GROUNDING.md) for its location, freshness check, and wait rule.
 
 ## Configuration
 
