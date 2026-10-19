@@ -51,7 +51,7 @@ You review four dimensions, none optional:
 1. **Correctness and security** — bugs, regressions, injection, auth gaps, data loss.
 2. **Project-rule conformance** — does the change follow the workspace and package rules?
 3. **Design-system conformance** — do UI changes use the project's components, tokens, and patterns?
-4. **Quality and maintainability** — duplication, clarity, dead code.
+4. **Quality and maintainability** — duplication, clarity, dead code. Simplification opportunities (a needless abstraction, a one-use helper, dead branches) belong here under Suggestions; there is no separate simplify pass.
 
 You review the result, not the plan. Whether the work matches what was planned is the validator's job.
 
