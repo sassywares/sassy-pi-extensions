@@ -2,15 +2,10 @@
  * Sassy Handoff - summarize the current session and continue in a fresh one.
  *
  * Usage:
- *   /handoff [mode:review|pipeline] <goal for the next session>
+ *   /handoff <goal for the next session>
  *
- * mode:review (default): generate a focused continuation prompt, let the user
- * edit it, then open a new session with the prompt seeded in the editor
- * (submit to continue).
- *
- * mode:pipeline: generate the prompt and start the new session immediately,
- * sending the prompt as its first user message (skill commands inside it are
- * expanded).
+ * Generates a focused continuation prompt, lets the user edit it, then opens a
+ * new session with the prompt seeded in the editor for the user to submit.
  *
  * Session replacement is only available from command handlers, which is why
  * this is a command and not a tool.
@@ -94,19 +89,11 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			let rest = args.trim();
-			let pipeline = false;
-			if (rest.startsWith("mode:review")) {
-				rest = rest.slice("mode:review".length).trim();
-			} else if (rest.startsWith("mode:pipeline")) {
-				pipeline = true;
-				rest = rest.slice("mode:pipeline".length).trim();
-			}
-			if (!rest) {
-				ctx.ui.notify("Usage: /handoff [mode:review|pipeline] <goal for next session>", "error");
+			const goal = args.trim();
+			if (!goal) {
+				ctx.ui.notify("Usage: /handoff <goal for next session>", "error");
 				return;
 			}
-			const goal = rest;
 
 			const messages = getHandoffMessages(ctx.sessionManager.getBranch());
 			if (messages.length === 0) {
@@ -162,25 +149,18 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			let prompt = generated;
-			if (!pipeline) {
-				const edited = await ctx.ui.editor("Edit handoff prompt", generated);
-				if (edited === undefined) {
-					ctx.ui.notify("Handoff cancelled", "info");
-					return;
-				}
-				prompt = edited;
+			const edited = await ctx.ui.editor("Edit handoff prompt", generated);
+			if (edited === undefined) {
+				ctx.ui.notify("Handoff cancelled", "info");
+				return;
 			}
+			const prompt = edited;
 
 			const result = await ctx.newSession({
 				parentSession: currentSessionFile,
 				withSession: async (replacementCtx) => {
-					if (pipeline) {
-						await replacementCtx.sendUserMessage(prompt, { expandPromptTemplates: true });
-					} else {
-						replacementCtx.ui.setEditorText(prompt);
-						replacementCtx.ui.notify("Handoff ready. Submit when ready.", "info");
-					}
+					replacementCtx.ui.setEditorText(prompt);
+					replacementCtx.ui.notify("Handoff ready. Submit when ready.", "info");
 				},
 			});
 
