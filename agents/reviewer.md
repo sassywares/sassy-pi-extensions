@@ -30,14 +30,16 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null) || GIT_DIR=""
 BRIEF="${GIT_DIR:-.}/pi-grounding.md"
 HEAD=$(git rev-parse HEAD 2>/dev/null || echo none)
 DIRTY=$(git status --porcelain 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
-for _ in $(seq 1 30); do
-  { [ -f "$BRIEF" ] && grep -qx "head: $HEAD" "$BRIEF" && grep -qx "dirty: $DIRTY" "$BRIEF"; } && break
-  sleep 2
-done
+if [ -f "$BRIEF" ]; then
+  for _ in $(seq 1 30); do
+    { grep -qx "head: $HEAD" "$BRIEF" && grep -qx "dirty: $DIRTY" "$BRIEF"; } && break
+    sleep 2
+  done
+fi
 echo "$BRIEF"
 ```
 
-Read the brief if it exists. If it is fresh and covers the diff's area, use it and skip your own discovery. If it is missing or stale after the wait, do at most 5 bounded reads. Never become a second scout.
+Read the brief if it exists. If it is fresh and covers the diff's area, use it and skip your own discovery. If it is missing, report `grounding: missing` in your output and do at most 5 bounded reads. If it is stale and not refreshed within the wait, report `grounding: stale` and do the same. Never become a second scout.
 
 You review four dimensions, none optional:
 

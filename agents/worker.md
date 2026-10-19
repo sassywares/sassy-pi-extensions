@@ -16,14 +16,16 @@ GIT_DIR=$(git rev-parse --git-dir 2>/dev/null) || GIT_DIR=""
 BRIEF="${GIT_DIR:-.}/pi-grounding.md"
 HEAD=$(git rev-parse HEAD 2>/dev/null || echo none)
 DIRTY=$(git status --porcelain 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
-for _ in $(seq 1 30); do
-  { [ -f "$BRIEF" ] && grep -qx "head: $HEAD" "$BRIEF" && grep -qx "dirty: $DIRTY" "$BRIEF"; } && break
-  sleep 2
-done
+if [ -f "$BRIEF" ]; then
+  for _ in $(seq 1 30); do
+    { grep -qx "head: $HEAD" "$BRIEF" && grep -qx "dirty: $DIRTY" "$BRIEF"; } && break
+    sleep 2
+  done
+fi
 echo "$BRIEF"
 ```
 
-Read the brief if it exists. If it is missing or stale after the wait, do your own bounded lookups (at most 5). Do not run a broad discovery pass; the brief exists to make that unnecessary.
+Read the brief if it exists. If it is missing or stale, do your own bounded lookups (at most 5) and note `grounding: missing` or `grounding: stale` in Notes. Do not run a broad discovery pass; the brief exists to make that unnecessary.
 
 If you are fixing findings from the reviewer or validator, fix exactly the reported items and nothing else.
 
