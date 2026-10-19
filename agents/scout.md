@@ -12,22 +12,28 @@ You do not form opinions, recommend changes, or review code. You gather verified
 
 ## Where the brief goes
 
-Locate the git directory and write `pi-grounding.md` there:
+The brief lives in a per-user temp directory, keyed by the absolute repo/worktree root, so it never touches the repo and parallel work in another repo cannot collide with it:
 
 ```bash
-GIT_DIR=$(git rev-parse --git-dir 2>/dev/null) || GIT_DIR=""
-BRIEF="${GIT_DIR:-.}/pi-grounding.md"
+ROOT="/tmp/pi-grounding-$(id -u)"
+[ -L "$ROOT" ] && { echo "unsafe symlink: $ROOT" >&2; exit 1; }
+[ -d "$ROOT" ] || { umask 077; mkdir -p "$ROOT"; }
+chmod 700 "$ROOT" 2>/dev/null
+ROOT_ABS=$(cd "$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")" && pwd -P)
+KEY=$(printf '%s' "$ROOT_ABS" | shasum -a 256 | cut -d' ' -f1)
+BRIEF="$ROOT/$KEY.md"
+echo "$BRIEF"
 ```
 
-`${GIT_DIR:-.}` is `.git`, a worktree git dir, or `.` in a non-git folder. Never write the brief anywhere else, and never commit it.
+Write atomically: build the file at `$BRIEF.$$.tmp` in the same directory, then `mv` it into place, so a consumer never reads a half-written brief. Never write the brief inside the repo, and never commit it.
 
 ## The brief format
 
 ```
 ---
-repo: <absolute repo root>
+repo: <absolute repo root, the value of ROOT_ABS>
 head: <git rev-parse HEAD, or "none">
-dirty: <sha256 of git status --porcelain, or "none">
+dirty: <sha256 of `git status --porcelain`, `git diff`, and `git diff --cached` combined, or "none">
 scope: <the one question you were asked, in one line>
 written: <ISO-8601 timestamp>
 ---

@@ -26,10 +26,15 @@ Everything else is out of scope. Do not grep the repo to orient yourself, do not
 Before reading anything, read the shared grounding brief — the `scout` writes it and it exists so you do not re-derive project context. Locate and check it in one call:
 
 ```bash
-GIT_DIR=$(git rev-parse --git-dir 2>/dev/null) || GIT_DIR=""
-BRIEF="${GIT_DIR:-.}/pi-grounding.md"
+ROOT="/tmp/pi-grounding-$(id -u)"
+[ -L "$ROOT" ] && { echo "unsafe symlink: $ROOT" >&2; exit 1; }
+[ -d "$ROOT" ] || { umask 077; mkdir -p "$ROOT"; }
+chmod 700 "$ROOT" 2>/dev/null
+ROOT_ABS=$(cd "$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")" && pwd -P)
+KEY=$(printf '%s' "$ROOT_ABS" | shasum -a 256 | cut -d' ' -f1)
+BRIEF="$ROOT/$KEY.md"
 HEAD=$(git rev-parse HEAD 2>/dev/null || echo none)
-DIRTY=$(git status --porcelain 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
+DIRTY=$( { git status --porcelain; git diff; git diff --cached; } 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
 if [ -f "$BRIEF" ]; then
   for _ in $(seq 1 30); do
     { grep -qx "head: $HEAD" "$BRIEF" && grep -qx "dirty: $DIRTY" "$BRIEF"; } && break
