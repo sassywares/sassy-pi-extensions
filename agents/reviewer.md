@@ -23,7 +23,21 @@ Everything else is out of scope. Do not grep the repo to orient yourself, do not
 
 ## Grounding
 
-Before reading anything, read the shared grounding brief — the `scout` writes it and it exists so you do not re-derive project context. See `GROUNDING.md` in this package for the path and the freshness check. If the brief is fresh and covers the diff's area, use it and skip your own discovery. If it is missing or stale, wait up to 60 seconds for it, then do at most 5 bounded reads. Never become a second scout.
+Before reading anything, read the shared grounding brief — the `scout` writes it and it exists so you do not re-derive project context. Locate and check it in one call:
+
+```bash
+GIT_DIR=$(git rev-parse --git-dir 2>/dev/null) || GIT_DIR=""
+BRIEF="${GIT_DIR:-.}/pi-grounding.md"
+HEAD=$(git rev-parse HEAD 2>/dev/null || echo none)
+DIRTY=$(git status --porcelain 2>/dev/null | shasum -a 256 | cut -d' ' -f1)
+for _ in $(seq 1 30); do
+  { [ -f "$BRIEF" ] && grep -qx "head: $HEAD" "$BRIEF" && grep -qx "dirty: $DIRTY" "$BRIEF"; } && break
+  sleep 2
+done
+echo "$BRIEF"
+```
+
+Read the brief if it exists. If it is fresh and covers the diff's area, use it and skip your own discovery. If it is missing or stale after the wait, do at most 5 bounded reads. Never become a second scout.
 
 You review four dimensions, none optional:
 
