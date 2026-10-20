@@ -32,9 +32,37 @@ import { Type } from "typebox";
 import { type AgentConfig, type AgentScope, discoverAgents } from "./agents.ts";
 
 const MAX_PARALLEL_TASKS = 8;
-const MAX_CONCURRENCY = 4;
+// Default to 2 concurrent subagents. A three-worker MiniMax M3.1 Flash batch
+// showed stream stalls and request timeouts under load. DeepSeek Flash was fine
+// with 4; raise this with PI_SUBAGENT_CONCURRENCY for a DeepSeek-only dispatch.
+const MAX_CONCURRENCY = readNonNegativeInt(process.env.PI_SUBAGENT_CONCURRENCY, 2) || 2;
+const IDLE_TIMEOUT_MS = readNonNegativeInt(process.env.PI_SUBAGENT_IDLE_TIMEOUT_MS, 120_000);
 const COLLAPSED_ITEM_COUNT = 10;
 const PER_TASK_OUTPUT_CAP = 50 * 1024;
+
+function readNonNegativeInt(value: string | undefined, fallback: number): number {
+	if (value === undefined || value.trim() === "") return fallback;
+	const parsed = Number(value);
+	return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : fallback;
+}
+
+function getTelemetryPath(): string | null {
+	const configured = process.env.PI_SUBAGENT_TELEMETRY?.trim();
+	if (configured === "0" || configured === "off" || configured === "false") return null;
+	if (configured?.startsWith("~/")) return path.join(os.homedir(), configured.slice(2));
+	return configured || path.join(getAgentDir(), "subagent-runs.jsonl");
+}
+
+function appendSubagentTelemetry(entry: Record<string, unknown>): void {
+	const file = getTelemetryPath();
+	if (!file) return;
+	try {
+		fs.mkdirSync(path.dirname(file), { recursive: true });
+		fs.appendFileSync(file, `${JSON.stringify(entry)}\n`, { encoding: "utf-8", mode: 0o600 });
+	} catch {
+		// Telemetry is best-effort; never fail a subagent run because logging failed.
+	}
+}
 
 function formatTokens(count: number): string {
 	if (count < 1000) return count.toString();
@@ -322,6 +350,16 @@ async function runSingleAgent(
 		step,
 	};
 
+	const runStartedAt = Date.now();
+	let wasAborted = false;
+	let watchdogKilled = false;
+	let runError: string | undefined;
+	let modelMs = 0;
+	let toolMs = 0;
+	let errorTurns = 0;
+	let retries = 0;
+	let slowestTurnMs = 0;
+
 	const emitUpdate = () => {
 		if (onUpdate) {
 			onUpdate({
@@ -340,7 +378,6 @@ async function runSingleAgent(
 		}
 
 		args.push(`Task: ${task}`);
-		let wasAborted = false;
 
 		const exitCode = await new Promise<number>((resolve) => {
 			const invocation = getPiInvocation(args);
@@ -350,6 +387,38 @@ async function runSingleAgent(
 				stdio: ["ignore", "pipe", "pipe"],
 			});
 			let buffer = "";
+			let killRequested = false;
+			let settled = false;
+			let idleTimer: ReturnType<typeof setTimeout> | undefined;
+
+			const settle = (code: number) => {
+				if (settled) return;
+				settled = true;
+				if (idleTimer) clearTimeout(idleTimer);
+				resolve(code);
+			};
+
+			const killProc = (reason: string) => {
+				if (killRequested) return;
+				killRequested = true;
+				currentResult.stopReason = "error";
+				currentResult.errorMessage = reason;
+				proc.kill("SIGTERM");
+				const hardKill = setTimeout(() => {
+					if (proc.exitCode === null && proc.signalCode === null) proc.kill("SIGKILL");
+				}, 5000);
+			};
+
+			const armIdleTimer = () => {
+				if (IDLE_TIMEOUT_MS <= 0 || killRequested || settled) return;
+				if (idleTimer) clearTimeout(idleTimer);
+				idleTimer = setTimeout(() => {
+					watchdogKilled = true;
+					killProc(`Subagent idle for ${IDLE_TIMEOUT_MS}ms; terminated by watchdog.`);
+				}, IDLE_TIMEOUT_MS);
+			};
+
+			armIdleTimer();
 
 			const processLine = (line: string) => {
 				if (!line.trim()) return;
@@ -375,6 +444,10 @@ async function runSingleAgent(
 							currentResult.usage.cost += usage.cost?.total || 0;
 							currentResult.usage.contextTokens = usage.totalTokens || 0;
 						}
+						const turnMs = (msg as Message & { durationMs?: number }).durationMs ?? 0;
+						modelMs += turnMs;
+						slowestTurnMs = Math.max(slowestTurnMs, turnMs);
+						if (msg.stopReason === "error" || msg.errorMessage) errorTurns++;
 						if (!currentResult.model && msg.model) currentResult.model = msg.model;
 						if (msg.stopReason) currentResult.stopReason = msg.stopReason;
 						if (msg.errorMessage) currentResult.errorMessage = msg.errorMessage;
@@ -384,11 +457,16 @@ async function runSingleAgent(
 
 				if (event.type === "tool_result_end" && event.message) {
 					currentResult.messages.push(event.message as Message);
+					const toolDuration = (event.message as Message & { durationMs?: number }).durationMs;
+					if (typeof toolDuration === "number") toolMs += toolDuration;
 					emitUpdate();
 				}
+
+				if (event.type === "auto_retry_start") retries++;
 			};
 
 			proc.stdout.on("data", (data) => {
+				armIdleTimer();
 				buffer += data.toString();
 				const lines = buffer.split("\n");
 				buffer = lines.pop() || "";
@@ -396,35 +474,67 @@ async function runSingleAgent(
 			});
 
 			proc.stderr.on("data", (data) => {
+				armIdleTimer();
 				currentResult.stderr += data.toString();
 			});
 
 			proc.on("close", (code) => {
 				if (buffer.trim()) processLine(buffer);
-				resolve(code ?? 0);
+				settle(code ?? 0);
 			});
 
 			proc.on("error", () => {
-				resolve(1);
+				settle(1);
 			});
 
 			if (signal) {
-				const killProc = () => {
+				const onAbort = () => {
 					wasAborted = true;
-					proc.kill("SIGTERM");
-					setTimeout(() => {
-						if (!proc.killed) proc.kill("SIGKILL");
-					}, 5000);
+					killProc("Subagent was aborted");
 				};
-				if (signal.aborted) killProc();
-				else signal.addEventListener("abort", killProc, { once: true });
+				if (signal.aborted) onAbort();
+				else signal.addEventListener("abort", onAbort, { once: true });
+				proc.on("close", () => signal.removeEventListener("abort", onAbort));
 			}
 		});
 
 		currentResult.exitCode = exitCode;
 		if (wasAborted) throw new Error("Subagent was aborted");
 		return currentResult;
+	} catch (error) {
+		runError = error instanceof Error ? error.message : String(error);
+		currentResult.exitCode = currentResult.exitCode || 1;
+		throw error;
 	} finally {
+		appendSubagentTelemetry({
+			timestamp: new Date().toISOString(),
+			startedAt: new Date(runStartedAt).toISOString(),
+			agent: agentName,
+			model: currentResult.model ?? model ?? "inherited",
+			task: task.replace(/\s+/g, " ").slice(0, 300),
+			cwd: cwd ?? defaultCwd,
+			exitCode: currentResult.exitCode,
+			stopReason: currentResult.stopReason ?? null,
+			errorMessage: currentResult.errorMessage ?? runError ?? null,
+			errors: errorTurns,
+			retries,
+			watchdogKilled,
+			aborted: wasAborted,
+			durationMs: Date.now() - runStartedAt,
+			modelMs,
+			toolMs,
+			turns: currentResult.usage.turns,
+			slowestTurnMs,
+			inputTokens: currentResult.usage.input,
+			outputTokens: currentResult.usage.output,
+			cacheReadTokens: currentResult.usage.cacheRead,
+			cacheWriteTokens: currentResult.usage.cacheWrite,
+			contextTokens: currentResult.usage.contextTokens,
+			cost: currentResult.usage.cost,
+			idleTimeoutMs: IDLE_TIMEOUT_MS,
+			concurrency: MAX_CONCURRENCY,
+			stderr: currentResult.stderr.trim().slice(-2000),
+		});
 		if (tmpPromptPath)
 			try {
 				fs.unlinkSync(tmpPromptPath);

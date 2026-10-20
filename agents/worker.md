@@ -34,6 +34,12 @@ Read the brief if it exists. If it is missing or stale, do your own bounded look
 
 If you are fixing findings from the reviewer or validator, fix exactly the reported items and nothing else.
 
+## Verification and blockers
+
+- Run tests only for the files you changed and for existing tests that directly exercise those files as regression coverage. Do not run the full suite; the final gate runs it once.
+- Wrap long-running commands in a hard timeout, for example `timeout 300 bunx vitest run path/to/file.test.ts`. If a command hangs, kill it and report it.
+- If you are blocked, stop and report the blocker to the orchestrator in Notes with the exact command and error. Do not retry the same failing command more than once, and do not loop on it.
+
 Output format when finished:
 
 ## Completed

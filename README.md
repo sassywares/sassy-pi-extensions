@@ -130,6 +130,10 @@ Link them with `./scripts/install-agents.sh`. Edit the frontmatter to change eac
 
 Every subagent reads the same grounding brief instead of re-exploring the repo. See [GROUNDING.md](GROUNDING.md) for its location, freshness check, and wait rule.
 
+Parallel dispatch defaults to two concurrent subagents. A three-worker MiniMax M3.1 Flash batch showed stream stalls and request timeouts under load; DeepSeek Flash was fine with four. Raise the limit with `PI_SUBAGENT_CONCURRENCY` for a DeepSeek-only dispatch.
+
+A watchdog kills a subagent when it emits no output for two minutes, which catches provider streams that hang after a partial response. Completed runs append one JSON line to `~/.pi/agent/subagent-runs.jsonl` with wall time, model time, tool time, turns, error turns, retries, token usage, cost, and the watchdog outcome. Use it to compare models instead of reconstructing runs from session files.
+
 ## Configuration
 
 | Variable | Default | Effect |
@@ -137,6 +141,9 @@ Every subagent reads the same grounding brief instead of re-exploring the repo. 
 | `PI_AUTO_TITLE` | unset | Set to `0` to disable automatic titles. `/title` still works. |
 | `EXA_API_KEY` | unset | Use the direct Exa API instead of the public Exa MCP endpoint. |
 | `PI_AGENTS_DIR` | `~/.pi/agent/agents` | Target directory for `scripts/install-agents.sh`. |
+| `PI_SUBAGENT_CONCURRENCY` | `2` | Maximum parallel subagent processes. DeepSeek Flash handled 4; MiniMax M3.1 Flash stalled with 3. |
+| `PI_SUBAGENT_IDLE_TIMEOUT_MS` | `120000` | Kill a subagent after this many milliseconds with no stdout/stderr events. Set to `0` to disable. |
+| `PI_SUBAGENT_TELEMETRY` | `~/.pi/agent/subagent-runs.jsonl` | Telemetry JSONL path, or `0`/`off` to disable. |
 
 ## Security
 
