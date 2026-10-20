@@ -132,7 +132,7 @@ Every subagent reads the same grounding brief instead of re-exploring the repo. 
 
 Parallel dispatch defaults to two concurrent subagents. A three-worker MiniMax M3.1 Flash batch showed stream stalls and request timeouts under load; DeepSeek Flash was fine with four. Raise the limit with `PI_SUBAGENT_CONCURRENCY` for a DeepSeek-only dispatch.
 
-A watchdog kills a subagent when it emits no output for two minutes, which catches provider streams that hang after a partial response. Completed runs append one JSON line to `~/.pi/agent/subagent-runs.jsonl` with wall time, model time, tool time, turns, error turns, retries, token usage, cost, and the watchdog outcome. Use it to compare models instead of reconstructing runs from session files.
+A watchdog kills a subagent when it emits no output for two minutes, which catches provider streams that hang after a partial response. Completed runs append one JSON line to `~/.pi/agent/subagent-runs.jsonl` with model, thinking level, wall time, model time, tool time, turns, error turns, retries, token usage, cost, and the watchdog outcome. Use it to compare models instead of reconstructing runs from session files.
 
 ## Configuration
 

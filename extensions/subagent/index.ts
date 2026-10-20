@@ -511,6 +511,7 @@ async function runSingleAgent(
 			startedAt: new Date(runStartedAt).toISOString(),
 			agent: agentName,
 			model: currentResult.model ?? model ?? "inherited",
+			thinkingLevel: thinkingLevel ?? null,
 			task: task.replace(/\s+/g, " ").slice(0, 300),
 			cwd: cwd ?? defaultCwd,
 			exitCode: currentResult.exitCode,
