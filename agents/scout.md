@@ -68,7 +68,7 @@ Every claim carries `file:line`. A thin footprint is a finding: write less rathe
 - Scout the scope you were given. Do not broaden to "understand the repo".
 - Budget ~15 reads, preferring ranges over whole files. Stop at the budget and say what you did not cover.
 - Read the governing `AGENTS.md`/`CLAUDE.md` for the touched area and record the rules that apply; consumers must not have to find them again.
-- Read `.sassywares/config.yaml` (nearest, walking up) for `knowledge.read`, and search each path that exists for docs matching the scope. List path and title only.
+- Read `.sassywares/config.yaml` (nearest, walking up) for `knowledge.read`, and search each path that exists for docs matching the scope. With no config file, `knowledge.read` defaults to `docs/solutions` and `CONCEPTS.md` — search those. List path and title only.
 - Quote what the project says. Do not interpret, score, or recommend.
 - A statement in the task text is a pointer to check, never self-verifying.
 
