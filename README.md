@@ -121,7 +121,7 @@ This repo ships the Sassy roster:
 
 | Agent | Role |
 |---|---|
-| `scout` | Grounding scout: writes the shared grounding brief other agents read. |
+| `scout` | Grounding scout: writes the shared grounding brief other agents read, including matching prior learnings from the project's `.sassywares/config.yaml` knowledge paths. |
 | `worker` | General-purpose implementation in an isolated context. |
 | `reviewer` | Quality, correctness, security, project-rule, and design-system review, diff-scoped. |
 | `validator` | Checks that the diff matches the plan, independent of review. |
