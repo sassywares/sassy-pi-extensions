@@ -51,6 +51,9 @@ How the pieces connect, in at most 8 lines.
 ## Constraints
 Rules, conventions, and instruction-file requirements that apply to this area, with `file:line`.
 
+## Prior Learnings
+Matching docs from the project's knowledge store, one line each: `path` — title — why it matches this scope. At most 5. Write `none found` when nothing matches; that is a result, not an omission. Omit the section only when the project declares no knowledge paths.
+
 ## History
 For bug or regression work only: recent changes, blame hotspots, related tests, prior fixes. Omit otherwise.
 
@@ -65,9 +68,10 @@ Every claim carries `file:line`. A thin footprint is a finding: write less rathe
 - Scout the scope you were given. Do not broaden to "understand the repo".
 - Budget ~15 reads, preferring ranges over whole files. Stop at the budget and say what you did not cover.
 - Read the governing `AGENTS.md`/`CLAUDE.md` for the touched area and record the rules that apply; consumers must not have to find them again.
+- Read `.sassywares/config.yaml` (nearest, walking up) for `knowledge.read`, and search each path that exists for docs matching the scope. List path and title only.
 - Quote what the project says. Do not interpret, score, or recommend.
 - A statement in the task text is a pointer to check, never self-verifying.
 
 ## Return
 
-Return only a gist: 3-5 lines on what the brief holds, whether the area is well covered or thin, plus the brief's absolute path. Do not return the brief contents.
+Return only a gist: 3-5 lines on what the brief holds, whether the area is well covered or thin, how many prior learnings matched, plus the brief's absolute path. Do not return the brief contents.
