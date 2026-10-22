@@ -17,6 +17,7 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createWrappedOperations, detectBackend, type SandboxBackend } from "./backends.ts";
+import { createModesFooter, type ModeBadge } from "./footer.ts";
 
 type Mode = "work" | "ask";
 
@@ -51,6 +52,8 @@ export default function modesExtension(pi: ExtensionAPI): void {
 	let backendReason = "not detected yet";
 	let backendChecked = false;
 	let workTools: string[] | undefined;
+	let footerTui: { requestRender(): void } | undefined;
+	let footerOwned = false;
 	const wrappedCalls = new Set<string>();
 
 	function configuredAskTools(): string[] {
@@ -72,12 +75,59 @@ export default function modesExtension(pi: ExtensionAPI): void {
 	}
 
 	function updateStatus(ctx: ExtensionContext): void {
-		if (mode === "work") {
-			ctx.ui.setStatus("modes", ctx.ui.theme.fg("accent", "▶ work"));
+		ctx.ui.setStatus("modes", undefined);
+
+		if (mode !== "ask") return;
+
+		// In the TUI the badge lives in the footer's first line; other modes have
+		// no footer, so they keep the plain status line.
+		if (ctx.mode === "tui") {
+			footerTui?.requestRender();
 			return;
 		}
-		const text = backend ? `⏸ ask · ro(${backend.id})` : "⏸ ask · bash off";
-		ctx.ui.setStatus("modes", ctx.ui.theme.fg(backend ? "warning" : "error", text));
+
+		const badge = badgeSpec();
+		ctx.ui.setStatus("modes", ctx.ui.theme.fg(badge.tone, badge.text));
+	}
+
+	function badgeSpec(): ModeBadge {
+		if (backend) return { text: `⏸ ask · ro(${backend.id})`, tone: "warning" };
+		return { text: "⏸ ask · bash off", tone: "error" };
+	}
+
+	/**
+	 * Ask mode replaces the built-in footer so the badge can sit on the
+	 * directory/session line instead of taking a row of its own. Work mode
+	 * restores pi's native footer.
+	 */
+	function installAskFooter(ctx: ExtensionContext): void {
+		if (ctx.mode !== "tui" || footerOwned) return;
+		try {
+			ctx.ui.setFooter((tui, theme, footerData) => {
+				footerTui = tui;
+				const unsubscribe = footerData.onBranchChange(() => tui.requestRender());
+				return {
+					...createModesFooter(ctx, theme, footerData, badgeSpec),
+					dispose() {
+						unsubscribe();
+						footerTui = undefined;
+					},
+				};
+			});
+			footerOwned = true;
+		} catch {
+			// Fall back to the status line rendered by updateStatus().
+			ctx.ui.setFooter(undefined);
+			footerOwned = false;
+			footerTui = undefined;
+		}
+	}
+
+	function removeAskFooter(ctx: ExtensionContext): void {
+		if (ctx.mode !== "tui" || !footerOwned) return;
+		ctx.ui.setFooter(undefined);
+		footerOwned = false;
+		footerTui = undefined;
 	}
 
 	function describe(): string {
@@ -113,6 +163,7 @@ export default function modesExtension(pi: ExtensionAPI): void {
 			mode = "ask";
 			workTools = pi.getActiveTools();
 			pi.setActiveTools(askToolset());
+			installAskFooter(ctx);
 			updateStatus(ctx);
 			persist();
 			if (backend) {
@@ -126,6 +177,7 @@ export default function modesExtension(pi: ExtensionAPI): void {
 		mode = "work";
 		pi.setActiveTools(workTools ?? pi.getActiveTools());
 		workTools = undefined;
+		removeAskFooter(ctx);
 		updateStatus(ctx);
 		persist();
 		ctx.ui.notify("Work mode: full access restored.", "info");
@@ -239,6 +291,9 @@ export default function modesExtension(pi: ExtensionAPI): void {
 			await ensureBackend(ctx.cwd);
 			workTools = pi.getActiveTools();
 			pi.setActiveTools(askToolset());
+			installAskFooter(ctx);
+		} else {
+			removeAskFooter(ctx);
 		}
 		updateStatus(ctx);
 	});

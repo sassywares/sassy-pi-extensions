@@ -20,6 +20,7 @@ sassy-pi-extensions/
 │   ├── web-search.ts
 │   ├── modes/
 │   │   ├── backends.ts
+│   │   ├── footer.ts
 │   │   └── index.ts
 │   └── subagent/
 │       ├── agents.ts
@@ -128,6 +129,7 @@ There is no test runner. Verify manually:
 - `/modes` reports `sandbox-exec` or `bwrap`, and the footer matches.
 - In ask mode, `touch x` fails with `Operation not permitted`, while `git log` and `rg` still work.
 - In ask mode, `edit` and `write` are absent from the tool list and are blocked if called anyway.
+- The ask-mode badge sits on the working-directory/session line, and work mode restores pi's native footer.
 - `alt+m` returns to work mode with the original toolset and no `[ASK MODE ACTIVE]` context left.
 
 ## Conventions
