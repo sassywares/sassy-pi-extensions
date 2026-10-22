@@ -2,7 +2,7 @@
 name: scout
 description: Grounding scout — scouts the area it is asked about, writes a shared grounding brief other agents read instead of exploring the repo themselves
 tools: read, grep, find, ls, bash, write
-model: minimax/MiniMax-M3.1-Flash
+model: deepseek/deepseek-flash
 thinking: low
 ---
 

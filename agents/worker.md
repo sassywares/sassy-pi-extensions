@@ -1,7 +1,7 @@
 ---
 name: worker
 description: General-purpose implementation subagent with full capabilities and an isolated context
-model: minimax/MiniMax-M3.1-Flash
+model: deepseek/deepseek-flash
 thinking: medium
 ---
 
