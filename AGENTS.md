@@ -101,10 +101,15 @@ Any change under `extensions/` or `agents/`, or to the `pi` manifest in `package
    ```bash
    git push origin main
    ```
+4. Tag and push the tag, always, using the version just bumped:
+   ```bash
+   git tag -a v$(node -p "require('./package.json').version") -m v$(node -p "require('./package.json').version")
+   git push origin --tags
+   ```
 
-Do this without asking for confirmation. Do not leave extension changes uncommitted or unpushed. If any step fails, report the failure instead of continuing silently.
+Do this without asking for confirmation. Do not leave extension changes uncommitted, unpushed, or untagged. If any step fails, report the failure instead of continuing silently.
 
-Tag and push a `v*` tag only when the change should be published to npm. The tag triggers the OIDC workflow. See [Publishing](#publishing).
+**Tagging is mandatory, not optional.** Every version bump ships to npm, so a bumped version that is not tagged is a release that silently never happened. The tag triggers the OIDC workflow; without it, the npm package drifts behind `main` and every consumer installs a stale roster. Never bump without tagging in the same turn. See [Publishing](#publishing).
 
 ## Testing
 
@@ -150,5 +155,8 @@ Release checklist:
 2. Commit and push `main`.
 3. Tag and push: `git tag -a v0.3.1 -m v0.3.1 && git push origin v0.3.1`.
 4. Watch the Publish workflow under the repo's Actions tab.
+5. Confirm `npm view @sassywares/pi-extensions version` equals the new version.
+
+Treat steps 1–3 as one atomic action. If a bump is ever found untagged, tag it immediately rather than bumping again.
 
 The workflow skips publishing when the tag's version already exists on npm, so a manually published tag can be pushed safely. A new trusted publisher must complete its first OIDC publish within 2 days of being configured, or npm expires the configuration.
