@@ -15,6 +15,7 @@ The package is `@sassywares/pi-extensions`; the repo is `sassy-pi-extensions`.
   - [Web search and fetch](#web-search-and-fetch)
   - [Handoff](#handoff)
   - [Subagent](#subagent)
+  - [Modes](#modes)
 - [Configuration](#configuration)
 - [Security](#security)
 - [Provenance](#provenance)
@@ -77,6 +78,7 @@ pi -e ./sassy-pi-extensions
 | **`web-search`** | `web_search`, `web_fetch` | Searches the web via Exa and fetches readable page text with local-address protection. |
 | **`handoff`** | `/handoff <goal>` | Summarizes the session into a continuation prompt and opens a fresh session with it in the editor for you to submit. |
 | **`subagent`** | `subagent` tool | Runs single, parallel, or chained tasks in isolated pi processes and returns compact results. |
+| **`modes`** | `alt+m`, `/ask`, `/work` | Ask mode removes the write tools and runs bash under an OS-level read-only sandbox. Work mode is pi as usual. |
 
 ### Auto-title
 
@@ -134,6 +136,26 @@ Parallel dispatch defaults to two concurrent subagents. A three-worker MiniMax M
 
 A watchdog kills a subagent when it emits no output for two minutes, which catches provider streams that hang after a partial response. Completed runs append one JSON line to `~/.pi/agent/subagent-runs.jsonl` with model, thinking level, wall time, model time, tool time, turns, error turns, retries, token usage, cost, and the watchdog outcome. Use it to compare models instead of reconstructing runs from session files.
 
+### Modes
+
+Two modes, toggled with `alt+m` or `/ask` and `/work`. Ask mode makes it safe to think out loud; work mode is pi as usual.
+
+Ask mode enforces read-only access on two levels:
+
+1. **Toolset.** `edit`, `write`, `codemode`, `subagent`, and any other tool that can change files or run arbitrary code are removed from the model's active toolset, so it never sees them. A `tool_call` gate blocks them anyway, which also covers nested calls made by tools that stay active.
+2. **Sandboxed bash.** `read`, `grep`, `find`, `ls`, `bash`, `web_search`, and `web_fetch` stay available, because searching and reading is how the model answers honestly. Every bash command, including `!` input, is wrapped in an OS-level sandbox that denies filesystem writes:
+   - macOS: `sandbox-exec` with a `deny file-write*` profile.
+   - Linux: `bwrap` with `--ro-bind / /`.
+
+Writes do not fail quietly and they are not matched by pattern. `rm`, `sed -i`, `tee`, `>` redirection, `git checkout`, and a nested `bash -c` all fail at the OS level with `Operation not permitted`, while `git log`, `git diff`, `rg`, and network calls keep working. `/dev` and the temp directory stay writable so ordinary tools behave.
+
+A backend is only trusted after it proves both halves of the contract: reads inside the working directory must succeed **and** a probe write there must fail. A backend that is installed but cannot enforce (for example bubblewrap on a distribution that blocks unprivileged user namespaces) is discarded, and ask mode continues without bash rather than falling back to a command allowlist. The working directory always wins over the temp allowance: if the project itself lives under the temp directory, temp writes are denied too and `/modes` reports `temp dir is read-only`. `/modes` shows the verdict, and the footer shows `⏸ ask · ro(sandbox-exec)`, `⏸ ask · bash off`, or `▶ work`.
+
+- `--ask` starts a session in ask mode; the mode persists across resume.
+- `shift+tab` is not used, because pi binds it to the thinking level. To match an editor that uses it for modes, bind `app.thinking.cycle` to something else in `~/.pi/agent/keybindings.json` and add a shortcut there.
+- Ask mode is a guardrail for local changes, not a jail. Network access stays open, so a command can still change remote state if it holds a credential. Use pi's containerized setup when the boundary has to hold against a hostile model.
+- **Windows is unsupported by design.** Ask mode needs an OS-level read-only sandbox that Windows does not offer cheaply, so the extension registers nothing there. `/ask` and `/work` do not exist, and every tool behaves as before.
+
 ## Configuration
 
 | Variable | Default | Effect |
@@ -141,6 +163,8 @@ A watchdog kills a subagent when it emits no output for two minutes, which catch
 | `PI_AUTO_TITLE` | unset | Set to `0` to disable automatic titles. `/title` still works. |
 | `EXA_API_KEY` | unset | Use the direct Exa API instead of the public Exa MCP endpoint. |
 | `PI_AGENTS_DIR` | `~/.pi/agent/agents` | Target directory for `scripts/install-agents.sh`. |
+| `PI_MODES_BASH` | `auto` | Set to `off` to skip backend detection. Ask mode then runs without bash. |
+| `PI_MODES_ASK_TOOLS` | unset | Comma-separated extra tool names to allow in ask mode. |
 | `PI_SUBAGENT_CONCURRENCY` | `2` | Maximum parallel subagent processes. DeepSeek Flash handled 4; MiniMax M3.1 Flash stalled with 3. |
 | `PI_SUBAGENT_IDLE_TIMEOUT_MS` | `120000` | Kill a subagent after this many milliseconds with no stdout/stderr events. Set to `0` to disable. |
 | `PI_SUBAGENT_TELEMETRY` | `~/.pi/agent/subagent-runs.jsonl` | Telemetry JSONL path, or `0`/`off` to disable. |
@@ -153,6 +177,7 @@ Extensions run inside the pi process with the same OS permissions as pi. Review 
 - `auto-title` sends a short transcript of the opening turns to the model already selected for the session. Provider terms and data handling apply.
 - `/handoff` sends the conversation and your goal to the current model to generate the continuation prompt.
 - `subagent` starts additional pi processes. Their permissions match the tools allowed by their agent file and the pi process that spawned them.
+- `modes` ask mode denies local filesystem writes through the OS sandbox described above. It does not restrict network access, so a sandboxed command can still change remote state if it can authenticate. Work mode has no restrictions.
 - No credentials are stored by this package. `EXA_API_KEY` is read from the environment at call time.
 
 ## Provenance
@@ -167,6 +192,9 @@ sassy-pi-extensions/
 │   ├── auto-title.ts
 │   ├── handoff.ts
 │   ├── web-search.ts
+│   ├── modes/
+│   │   ├── backends.ts
+│   │   └── index.ts
 │   └── subagent/
 │       ├── agents.ts
 │       └── index.ts

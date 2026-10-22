@@ -1,7 +1,7 @@
 {
   "name": "@sassywares/pi-extensions",
-  "version": "0.3.18",
-  "description": "A zesty power pack for pi: auto-titled sessions, real web access, clean handoffs, and isolated subagents.",
+  "version": "0.3.19",
+  "description": "A zesty power pack for pi: auto-titled sessions, real web access, clean handoffs, isolated subagents, and ask/work modes.",
   "type": "module",
   "license": "MIT",
   "author": "Sassywares",
@@ -20,7 +20,8 @@
     "auto-title",
     "web-search",
     "handoff",
-    "subagent"
+    "subagent",
+    "modes"
   ],
   "files": [
     "extensions",
@@ -42,7 +43,8 @@
       "./extensions/auto-title.ts",
       "./extensions/web-search.ts",
       "./extensions/handoff.ts",
-      "./extensions/subagent/index.ts"
+      "./extensions/subagent/index.ts",
+      "./extensions/modes/index.ts"
     ]
   }
 }

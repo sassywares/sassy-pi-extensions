@@ -18,6 +18,9 @@ sassy-pi-extensions/
 │   ├── auto-title.ts
 │   ├── handoff.ts
 │   ├── web-search.ts
+│   ├── modes/
+│   │   ├── backends.ts
+│   │   └── index.ts
 │   └── subagent/
 │       ├── agents.ts
 │       └── index.ts
@@ -40,6 +43,7 @@ sassy-pi-extensions/
 | `extensions/auto-title.ts` | Automatic session naming and the `/title` command. |
 | `extensions/web-search.ts` | `web_search` and `web_fetch` tools backed by Exa. |
 | `extensions/handoff.ts` | `/handoff` command and session replacement. |
+| `extensions/modes/` | Ask/work modes, and the read-only bash backends behind ask mode. |
 | `extensions/subagent/` | The `subagent` tool and its agent discovery. |
 | `agents/*.md` | Sassy subagent definitions. Linked into `~/.pi/agent/agents/`. |
 | `scripts/install-agents.sh` | Symlinks `agents/*.md` into the user agent directory. |
@@ -121,6 +125,10 @@ There is no test runner. Verify manually:
 - `/title`, `/title <text>`, automatic naming, and `PI_AUTO_TITLE=0`.
 - `/handoff <goal>` or `/handoff mode:review <goal>` opens an editable prompt; `/handoff mode:pipeline <goal>` sends it.
 - `subagent` runs a single task and a chain using `{previous}`.
+- `/modes` reports `sandbox-exec` or `bwrap`, and the footer matches.
+- In ask mode, `touch x` fails with `Operation not permitted`, while `git log` and `rg` still work.
+- In ask mode, `edit` and `write` are absent from the tool list and are blocked if called anyway.
+- `alt+m` returns to work mode with the original toolset and no `[ASK MODE ACTIVE]` context left.
 
 ## Conventions
 
