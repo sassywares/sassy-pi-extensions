@@ -17,6 +17,7 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createWrappedOperations, detectBackend, type SandboxBackend } from "./backends.ts";
+import { createModesFooter, type ModeBadge } from "./footer.ts";
 
 type Mode = "work" | "ask";
 
@@ -51,6 +52,8 @@ export default function modesExtension(pi: ExtensionAPI): void {
 	let backendReason = "not detected yet";
 	let backendChecked = false;
 	let workTools: string[] | undefined;
+	let footerStatus: "none" | "custom" | "fallback" = "none";
+	let footerTui: { requestRender(): void } | undefined;
 	const wrappedCalls = new Set<string>();
 
 	function configuredAskTools(): string[] {
@@ -71,13 +74,55 @@ export default function modesExtension(pi: ExtensionAPI): void {
 		pi.appendEntry(STATE_CUSTOM_TYPE, { mode } satisfies PersistedState);
 	}
 
+	function badgeSpec(): ModeBadge {
+		if (mode === "work") return { text: "▶ work", tone: "accent" };
+		if (backend) return { text: `⏸ ask · ro(${backend.id})`, tone: "warning" };
+		return { text: "⏸ ask · bash off", tone: "error" };
+	}
+
 	function updateStatus(ctx: ExtensionContext): void {
-		if (mode === "work") {
-			ctx.ui.setStatus("modes", ctx.ui.theme.fg("accent", "▶ work"));
+		// The custom footer draws the badge itself, right-aligned.
+		if (footerStatus === "custom") {
+			ctx.ui.setStatus("modes", undefined);
+			footerTui?.requestRender();
 			return;
 		}
-		const text = backend ? `⏸ ask · ro(${backend.id})` : "⏸ ask · bash off";
-		ctx.ui.setStatus("modes", ctx.ui.theme.fg(backend ? "warning" : "error", text));
+		const badge = badgeSpec();
+		ctx.ui.setStatus("modes", ctx.ui.theme.fg(badge.tone, badge.text));
+	}
+
+	/**
+	 * Install a footer that keeps pi's rendering and appends the badge aligned to
+	 * the right edge. Falls back to the native footer plus a status line if pi's
+	 * footer cannot be driven from here.
+	 */
+	function installFooter(ctx: ExtensionContext): void {
+		if (ctx.mode !== "tui" || footerStatus === "custom") return;
+		const autoCompact = pi.getSettings().compaction?.enabled !== false;
+
+		ctx.ui.setFooter((tui, theme, footerData) => {
+			footerTui = tui;
+			const unsubscribe = footerData.onBranchChange(() => tui.requestRender());
+			return {
+				...createModesFooter(ctx, theme, footerData, badgeSpec, {
+					autoCompact,
+					onError: () => {
+						footerStatus = "fallback";
+						footerTui = undefined;
+						queueMicrotask(() => {
+							ctx.ui.setFooter(undefined);
+							updateStatus(ctx);
+						});
+					},
+				}),
+				dispose() {
+					unsubscribe();
+					footerTui = undefined;
+				},
+			};
+		});
+		footerStatus = "custom";
+		ctx.ui.setStatus("modes", undefined);
 	}
 
 	function describe(): string {
@@ -240,6 +285,7 @@ export default function modesExtension(pi: ExtensionAPI): void {
 			workTools = pi.getActiveTools();
 			pi.setActiveTools(askToolset());
 		}
+		installFooter(ctx);
 		updateStatus(ctx);
 	});
 }

@@ -20,6 +20,7 @@ sassy-pi-extensions/
 │   ├── web-search.ts
 │   ├── modes/
 │   │   ├── backends.ts
+│   │   ├── footer.ts
 │   │   └── index.ts
 │   └── subagent/
 │       ├── agents.ts
@@ -125,7 +126,8 @@ There is no test runner. Verify manually:
 - `/title`, `/title <text>`, automatic naming, and `PI_AUTO_TITLE=0`.
 - `/handoff <goal>` or `/handoff mode:review <goal>` opens an editable prompt; `/handoff mode:pipeline <goal>` sends it.
 - `subagent` runs a single task and a chain using `{previous}`.
-- `/modes` reports `sandbox-exec` or `bwrap`, and the footer matches.
+- `/modes` reports `sandbox-exec` or `bwrap`, and the footer badge matches.
+- The mode badge is right-aligned on its own footer line, and pi's directory/stats/model lines are unchanged.
 - In ask mode, `touch x` fails with `Operation not permitted`, while `git log` and `rg` still work.
 - In ask mode, `edit` and `write` are absent from the tool list and are blocked if called anyway.
 - `alt+m` returns to work mode with the original toolset and no `[ASK MODE ACTIVE]` context left.

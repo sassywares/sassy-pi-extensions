@@ -151,7 +151,7 @@ Writes do not fail quietly and they are not matched by pattern. `rm`, `sed -i`, 
 
 A backend is only trusted after it proves both halves of the contract: reads inside the working directory must succeed **and** a probe write there must fail. A backend that is installed but cannot enforce (for example bubblewrap on a distribution that blocks unprivileged user namespaces) is discarded, and ask mode continues without bash rather than falling back to a command allowlist. The working directory always wins over the temp allowance: if the project itself lives under the temp directory, temp writes are denied too and `/modes` reports `temp dir is read-only`.
 
-`/modes` shows the verdict, and the footer status line shows `⏸ ask · ro(sandbox-exec)`, `⏸ ask · bash off`, or `▶ work`.
+`/modes` shows the verdict. The mode badge sits on a footer line of its own, aligned to the right edge: `▶ work`, `⏸ ask · ro(sandbox-exec)`, or `⏸ ask · bash off`. To place it there without reimplementing pi's footer, the extension delegates to pi's own `FooterComponent` and appends the badge line, so directory, session name, token stats, model, and context usage stay exactly as pi renders them. If a future pi release changes what that component reads, the extension restores the native footer and falls back to a left-aligned status line.
 
 - `--ask` starts a session in ask mode; the mode persists across resume.
 - `shift+tab` is not used, because pi binds it to the thinking level. To match an editor that uses it for modes, bind `app.thinking.cycle` to something else in `~/.pi/agent/keybindings.json` and add a shortcut there.
