@@ -131,7 +131,8 @@ There is no test runner. Verify manually:
 - In ask mode, `touch x` fails with `Operation not permitted`, while `git log` and `rg` still work.
 - In ask mode, `edit` and `write` are absent from the tool list and are blocked if called anyway.
 - `alt+m` returns to work mode with the original toolset and no `[ASK MODE ACTIVE]` context left.
-
+- Switching ask -> work mid-session answers work on the next turn, and work -> ask answers ask.
+- Only one mode notice is present in context at a time (check with `/context` or a debug extension).
 ## Conventions
 
 - **Host packages are peers.** `@earendil-works/pi-coding-agent` and `typebox` stay in `peerDependencies` with `"*"`. Never put them in `dependencies`; pi supplies them.

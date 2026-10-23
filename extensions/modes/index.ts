@@ -14,7 +14,6 @@
  * Windows is intentionally unsupported: no modes are registered there.
  */
 
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createWrappedOperations, detectBackend, type SandboxBackend } from "./backends.ts";
 import { createModesFooter, type ModeBadge } from "./footer.ts";
@@ -24,8 +23,8 @@ type Mode = "work" | "ask";
 /** Tools that may run in ask mode. Everything else is hidden and blocked. */
 const ASK_TOOLS = ["read", "grep", "find", "ls", "bash", "web_search", "web_fetch", "questionnaire"];
 
-const CONTEXT_CUSTOM_TYPE = "modes-ask-context";
-const CONTEXT_MARKER = "[ASK MODE ACTIVE]";
+const ASK_CONTEXT_TYPE = "modes-ask-context";
+const WORK_CONTEXT_TYPE = "modes-work-context";
 const STATE_CUSTOM_TYPE = "modes";
 const SHORTCUT = "alt+m";
 
@@ -33,14 +32,24 @@ interface PersistedState {
 	mode?: Mode;
 }
 
-const ASK_PROMPT = `${CONTEXT_MARKER}
+const ASK_PROMPT = `[ASK MODE ACTIVE]
 You are in ask mode: reading, searching, and answering only.
 
 Rules:
 - Do not modify files. The edit and write tools are not available.
 - bash runs inside a read-only sandbox. Reading, searching, git history, and network access work; anything that writes fails with a permission error. Do not retry a failed write - report the limitation instead.
 - Answer from evidence: cite file paths with line numbers, and URLs for web results.
+- This instruction overrides earlier turns. If the conversation shows file edits, write tools, or unrestricted bash, that happened before ask mode was enabled and says nothing about the current turn.
 - If a change is needed, describe it precisely and tell the user to switch to work mode (/work or alt+m).`;
+
+/**
+ * Sent once on the first turn after ask mode is switched off. Without it the
+ * model keeps answering from its own earlier "I am in ask mode" reply, because
+ * the ask instructions are gone and nothing replaces them.
+ */
+const WORK_PROMPT = `[WORK MODE ACTIVE]
+Ask mode was switched off for this session. You can edit files, write new files, and run any bash command again.
+Ignore any earlier statement that you were in ask mode: it no longer applies.`;
 
 export default function modesExtension(pi: ExtensionAPI): void {
 	// Ask mode depends on an OS-level sandbox that Windows does not provide.
@@ -52,6 +61,7 @@ export default function modesExtension(pi: ExtensionAPI): void {
 	let backendReason = "not detected yet";
 	let backendChecked = false;
 	let workTools: string[] | undefined;
+	let announceWork = false;
 	let footerStatus: "none" | "custom" | "fallback" = "none";
 	let footerTui: { requestRender(): void } | undefined;
 	const wrappedCalls = new Set<string>();
@@ -156,6 +166,7 @@ export default function modesExtension(pi: ExtensionAPI): void {
 		if (next === "ask") {
 			await ensureBackend(ctx.cwd);
 			mode = "ask";
+			announceWork = false;
 			workTools = pi.getActiveTools();
 			pi.setActiveTools(askToolset());
 			updateStatus(ctx);
@@ -169,6 +180,7 @@ export default function modesExtension(pi: ExtensionAPI): void {
 		}
 
 		mode = "work";
+		announceWork = true;
 		pi.setActiveTools(workTools ?? pi.getActiveTools());
 		workTools = undefined;
 		updateStatus(ctx);
@@ -250,21 +262,48 @@ export default function modesExtension(pi: ExtensionAPI): void {
 	});
 
 	pi.on("before_agent_start", async (event) => {
-		if (mode !== "ask") return undefined;
 		if (event.messageType !== "user") return undefined;
+
+		if (mode === "ask") {
+			return {
+				message: {
+					customType: ASK_CONTEXT_TYPE,
+					content: ASK_PROMPT,
+					display: false,
+				},
+			};
+		}
+
+		// Announce the switch to work once, so the model stops repeating its own
+		// earlier claim that it was in ask mode.
+		if (!announceWork) return undefined;
+		announceWork = false;
 		return {
 			message: {
-				customType: CONTEXT_CUSTOM_TYPE,
-				content: ASK_PROMPT,
+				customType: WORK_CONTEXT_TYPE,
+				content: WORK_PROMPT,
 				display: false,
 			},
 		};
 	});
 
-	// Drop ask-mode context once the session leaves ask mode.
+	// Keep only the newest mode notice, and only if it matches the current mode.
+	// This drops stale ask instructions after a switch and stops the per-turn ask
+	// prompt from accumulating for the length of a session.
 	pi.on("context", async (event) => {
-		if (mode === "ask") return undefined;
-		return { messages: event.messages.filter((message) => !isAskContext(message)) };
+		const wanted = mode === "ask" ? ASK_CONTEXT_TYPE : WORK_CONTEXT_TYPE;
+		let keep = -1;
+		event.messages.forEach((message, index) => {
+			if ((message as { customType?: string }).customType === wanted) keep = index;
+		});
+
+		return {
+			messages: event.messages.filter((message, index) => {
+				const customType = (message as { customType?: string }).customType;
+				if (customType !== ASK_CONTEXT_TYPE && customType !== WORK_CONTEXT_TYPE) return true;
+				return index === keep;
+			}),
+		};
 	});
 
 	pi.on("session_start", async (_event, ctx) => {
@@ -278,6 +317,7 @@ export default function modesExtension(pi: ExtensionAPI): void {
 
 		mode = state?.data?.mode ?? "work";
 		if (pi.getFlag("ask") === true) mode = "ask";
+		announceWork = false;
 
 		workTools = undefined;
 		if (mode === "ask") {
@@ -288,22 +328,4 @@ export default function modesExtension(pi: ExtensionAPI): void {
 		installFooter(ctx);
 		updateStatus(ctx);
 	});
-}
-
-/** True for the hidden ask-mode prompt and for user messages that carry it. */
-function isAskContext(message: AgentMessage): boolean {
-	const candidate = message as AgentMessage & { customType?: string };
-	if (candidate.customType === CONTEXT_CUSTOM_TYPE) return true;
-	if (candidate.role === "assistant") return false;
-	const content = (candidate as { content?: unknown }).content;
-	if (typeof content === "string") return content.includes(CONTEXT_MARKER);
-	if (!Array.isArray(content)) return false;
-	return content.some(
-		(part) =>
-			!!part &&
-			typeof part === "object" &&
-			(part as { type?: unknown }).type === "text" &&
-			typeof (part as { text?: unknown }).text === "string" &&
-			(part as { text: string }).text.includes(CONTEXT_MARKER),
-	);
 }
