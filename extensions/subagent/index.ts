@@ -29,7 +29,16 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { type AgentConfig, type AgentScope, discoverAgents } from "./agents.ts";
+import {
+	type AgentConfig,
+	type AgentScope,
+	DEFAULT_PROFILE,
+	type ModelDefaults,
+	discoverAgents,
+	resolveAgentModel,
+	resolveProfileSelection,
+	withProfile,
+} from "./agents.ts";
 
 const MAX_PARALLEL_TASKS = 8;
 // Default to 2 concurrent subagents. A three-worker MiniMax M3.1 Flash batch
@@ -82,6 +91,7 @@ function formatUsageStats(
 		turns?: number;
 	},
 	model?: string,
+	profile?: string,
 ): string {
 	const parts: string[] = [];
 	if (usage.turns) parts.push(`${usage.turns} turn${usage.turns > 1 ? "s" : ""}`);
@@ -93,7 +103,7 @@ function formatUsageStats(
 	if (usage.contextTokens && usage.contextTokens > 0) {
 		parts.push(`ctx:${formatTokens(usage.contextTokens)}`);
 	}
-	if (model) parts.push(model);
+	if (model) parts.push(profile ? `${model} (${profile})` : model);
 	return parts.join(" ");
 }
 
@@ -181,6 +191,7 @@ interface SingleResult {
 	stderr: string;
 	usage: UsageStats;
 	model?: string;
+	profile?: string;
 	stopReason?: string;
 	errorMessage?: string;
 	step?: number;
@@ -290,10 +301,7 @@ function getPiInvocation(args: string[]): { command: string; args: string[] } {
 
 type OnUpdateCallback = (partial: AgentToolResult<SubagentDetails>) => void;
 
-interface DispatchDefaults {
-	model?: string;
-	thinkingLevel?: ThinkingLevel;
-}
+type DispatchDefaults = ModelDefaults;
 
 async function runSingleAgent(
 	defaultCwd: string,
@@ -323,17 +331,29 @@ async function runSingleAgent(
 		};
 	}
 
-	const args: string[] = ["--mode", "json", "-p", "--no-session"];
-	const inheritsDispatchConfig = !agent.model;
-	const model = agent.model ?? dispatchDefaults.model;
-	if (model) args.push("--model", model);
-	// Per-agent `thinking:` frontmatter wins. Agents without it fall back to the
-	// dispatch config only when they also inherit the dispatcher's model.
-	const thinkingLevel = agent.thinking ?? (inheritsDispatchConfig ? dispatchDefaults.thinkingLevel : undefined);
-	if (thinkingLevel) {
-		args.push("--thinking", thinkingLevel);
+	const selection = dispatchDefaults.profile ?? { name: DEFAULT_PROFILE, source: "default" as const };
+	const resolved = resolveAgentModel(agent, selection, dispatchDefaults);
+
+	if (resolved.error) {
+		return {
+			agent: agentName,
+			agentSource: agent.source,
+			task,
+			exitCode: 1,
+			messages: [],
+			stderr: resolved.error,
+			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+			profile: selection.name,
+			step,
+		};
 	}
+
+	const args: string[] = ["--mode", "json", "-p", "--no-session"];
+	const model = resolved.model;
+	if (model) args.push("--model", model);
+	if (resolved.thinking) args.push("--thinking", resolved.thinking);
 	if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
+	const thinkingLevel = resolved.thinking as ThinkingLevel | undefined;
 
 	let tmpPromptDir: string | null = null;
 	let tmpPromptPath: string | null = null;
@@ -347,6 +367,7 @@ async function runSingleAgent(
 		stderr: "",
 		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
 		model,
+		profile: resolved.profile,
 		step,
 	};
 
@@ -511,6 +532,7 @@ async function runSingleAgent(
 			startedAt: new Date(runStartedAt).toISOString(),
 			agent: agentName,
 			model: currentResult.model ?? model ?? "inherited",
+			profile: currentResult.profile ?? selection.name,
 			thinkingLevel: thinkingLevel ?? null,
 			task: task.replace(/\s+/g, " ").slice(0, 300),
 			cwd: cwd ?? defaultCwd,
@@ -555,12 +577,14 @@ const TaskItem = Type.Object({
 	agent: Type.String({ description: "Name of the agent to invoke" }),
 	task: Type.String({ description: "Task to delegate to the agent" }),
 	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
+	profile: Type.Optional(Type.String({ description: "Profile to use instead of the dispatch default" })),
 });
 
 const ChainItem = Type.Object({
 	agent: Type.String({ description: "Name of the agent to invoke" }),
 	task: Type.String({ description: "Task with optional {previous} placeholder for prior output" }),
 	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
+	profile: Type.Optional(Type.String({ description: "Profile to use instead of the dispatch default" })),
 });
 
 const AgentScopeSchema = StringEnum(["user", "project", "both"] as const, {
@@ -578,6 +602,9 @@ const SubagentParams = Type.Object({
 		Type.Boolean({ description: "Prompt before running project-local agents. Default: true.", default: true }),
 	),
 	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process (single mode)" })),
+	profile: Type.Optional(
+		Type.String({ description: "Model profile to use, e.g. \"anthropic\". Defaults to the project's sassy.profile setting." }),
+	),
 });
 
 export default function (pi: ExtensionAPI) {
@@ -587,6 +614,7 @@ export default function (pi: ExtensionAPI) {
 		description: [
 			"Delegate tasks to specialized subagents with isolated context.",
 			"Modes: single (agent + task), parallel (tasks array), chain (sequential with {previous} placeholder).",
+			"Agents with profiles run the profile selected by the `profile` parameter, PI_SASSY_PROFILE, or the sassy.profile setting; agents with a plain model pin it.",
 			`Default agent scope is "user" (from ${path.join(getAgentDir(), "agents")}).`,
 			`To enable project-local agents in ${CONFIG_DIR_NAME}/agents, set agentScope: "both" (or "project").`,
 		].join(" "),
@@ -594,9 +622,11 @@ export default function (pi: ExtensionAPI) {
 
 		async execute(_toolCallId, params, signal, onUpdate, ctx) {
 			const agentScope: AgentScope = params.agentScope ?? "user";
+			const selection = resolveProfileSelection(params.profile, pi.getSettings());
 			const dispatchDefaults: DispatchDefaults = {
 				model: ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined,
 				thinkingLevel: ctx.thinkingLevel,
+				profile: selection,
 			};
 			const discovery = discoverAgents(ctx.cwd, agentScope);
 			const agents = discovery.agents;
@@ -684,7 +714,7 @@ export default function (pi: ExtensionAPI) {
 
 					const result = await runSingleAgent(
 						ctx.cwd,
-						dispatchDefaults,
+						withProfile(dispatchDefaults, step.profile),
 						agents,
 						step.agent,
 						taskWithContext,
@@ -757,7 +787,7 @@ export default function (pi: ExtensionAPI) {
 				const results = await mapWithConcurrencyLimit(params.tasks, MAX_CONCURRENCY, async (t, index) => {
 					const result = await runSingleAgent(
 						ctx.cwd,
-						dispatchDefaults,
+						withProfile(dispatchDefaults, t.profile),
 						agents,
 						t.agent,
 						t.task,
@@ -938,7 +968,7 @@ export default function (pi: ExtensionAPI) {
 							container.addChild(new Markdown(finalOutput.trim(), 0, 0, mdTheme));
 						}
 					}
-					const usageStr = formatUsageStats(r.usage, r.model);
+					const usageStr = formatUsageStats(r.usage, r.model, r.profile);
 					if (usageStr) {
 						container.addChild(new Spacer(1));
 						container.addChild(new Text(theme.fg("dim", usageStr), 0, 0));
@@ -954,7 +984,7 @@ export default function (pi: ExtensionAPI) {
 					text += `\n${renderDisplayItems(displayItems, COLLAPSED_ITEM_COUNT)}`;
 					if (displayItems.length > COLLAPSED_ITEM_COUNT) text += `\n${theme.fg("muted", "(Ctrl+O to expand)")}`;
 				}
-				const usageStr = formatUsageStats(r.usage, r.model);
+				const usageStr = formatUsageStats(r.usage, r.model, r.profile);
 				if (usageStr) text += `\n${theme.fg("dim", usageStr)}`;
 				return new Text(text, 0, 0);
 			}
@@ -1023,7 +1053,7 @@ export default function (pi: ExtensionAPI) {
 							container.addChild(new Markdown(finalOutput.trim(), 0, 0, mdTheme));
 						}
 
-						const stepUsage = formatUsageStats(r.usage, r.model);
+						const stepUsage = formatUsageStats(r.usage, r.model, r.profile);
 						if (stepUsage) container.addChild(new Text(theme.fg("dim", stepUsage), 0, 0));
 					}
 
@@ -1108,7 +1138,7 @@ export default function (pi: ExtensionAPI) {
 							container.addChild(new Markdown(finalOutput.trim(), 0, 0, mdTheme));
 						}
 
-						const taskUsage = formatUsageStats(r.usage, r.model);
+						const taskUsage = formatUsageStats(r.usage, r.model, r.profile);
 						if (taskUsage) container.addChild(new Text(theme.fg("dim", taskUsage), 0, 0));
 					}
 

@@ -22,7 +22,7 @@ The package is `@sassywares/pi-extensions`; the repo is `sassy-pi-extensions`.
 - [Repository layout](#repository-layout)
 - [Development](#development)
 - [Releasing](#releasing)
-- [Version profiles](#version-profiles)
+- [Model profiles](#model-profiles)
 - [Repository maintenance](#repository-maintenance)
 
 ## Why this suite
@@ -120,22 +120,36 @@ The `subagent` tool spawns a separate `pi` process per invocation, so each task 
 
 Agent definitions are Markdown files under `~/.pi/agent/agents/` and the nearest project `.pi/agents/`. Project agents override user agents with the same name.
 
-This repo ships the Sassy roster twice: `main` runs it on open-weight models, and the `anthropic` branch runs the identical roster, prompts and tools on Anthropic models only.
+Every agent also declares a `profiles:` list, so one roster runs on more than one provider. A dispatch picks a profile — a named model choice — and the child process starts on that profile's model.
 
-| Agent | Role | `main` | `anthropic` |
+| Agent | Role | `deepseek` profile | `anthropic` profile |
 |---|---|---|---|
 | `scout` | Grounding scout: writes the shared grounding brief other agents read, including matching prior learnings from the project's `.sassywares/config.yaml` knowledge paths. | `deepseek/deepseek-flash` | `anthropic/claude-haiku-4-5` |
 | `worker` | General-purpose implementation in an isolated context. | `deepseek/deepseek-flash` | `anthropic/claude-sonnet-4-5` |
 | `reviewer` | Quality, correctness, security, project-rule, and design-system review, diff-scoped. | `deepseek/deepseek-flash` | `anthropic/claude-opus-4-5` |
 | `validator` | Checks that the diff matches the plan, independent of review. | `deepseek/deepseek-flash` | `anthropic/claude-sonnet-4-5` |
 
-Link them with `./scripts/install-agents.sh`. Edit the frontmatter to change each agent's model, thinking level, or tool allowlist.
+Link them with `./scripts/install-agents.sh`. Edit the frontmatter to change a profile's model, thinking level, or tool allowlist.
+
+Pick a profile three ways, highest precedence first:
+
+1. The tool call: `{ agent: "worker", task: "…", profile: "anthropic" }`. Individual `tasks[]` and `chain[]` entries accept `profile` too.
+2. An environment variable: `PI_SASSY_PROFILE=anthropic`.
+3. A project setting in `.pi/settings.json`, which is where a project opts in once for everyone:
+
+   ```json
+   { "sassy": { "profile": "anthropic" } }
+   ```
+
+   Project settings override `~/.pi/agent/settings.json`; with neither set, the default profile is `deepseek`.
+
+A profile an agent does not define is an error naming the ones it does — it never falls back to the default provider. The run footer shows the model and, in parentheses, the profile it came from.
 
 Every subagent reads the same grounding brief instead of re-exploring the repo. See [GROUNDING.md](GROUNDING.md) for its location, freshness check, and wait rule.
 
-Parallel dispatch defaults to two concurrent subagents. A three-worker MiniMax M3.1 Flash batch showed stream stalls and request timeouts under load; DeepSeek Flash was fine with four. Raise the limit with `PI_SUBAGENT_CONCURRENCY` for a DeepSeek-only dispatch. The `anthropic` branch is Anthropic-only, so those provider notes do not apply there.
+Parallel dispatch defaults to two concurrent subagents. A three-worker MiniMax M3.1 Flash batch showed stream stalls and request timeouts under load; DeepSeek Flash was fine with four. Raise the limit with `PI_SUBAGENT_CONCURRENCY` for a DeepSeek-only dispatch.
 
-A watchdog kills a subagent when it emits no output for two minutes, which catches provider streams that hang after a partial response. Completed runs append one JSON line to `~/.pi/agent/subagent-runs.jsonl` with model, thinking level, wall time, model time, tool time, turns, error turns, retries, token usage, cost, and the watchdog outcome. Use it to compare models instead of reconstructing runs from session files.
+A watchdog kills a subagent when it emits no output for two minutes, which catches provider streams that hang after a partial response. Completed runs append one JSON line to `~/.pi/agent/subagent-runs.jsonl` with model, profile, thinking level, wall time, model time, tool time, turns, error turns, retries, token usage, cost, and the watchdog outcome. Use it to compare models instead of reconstructing runs from session files.
 
 ### Modes
 
@@ -169,9 +183,19 @@ A backend is only trusted after it proves both halves of the contract: reads ins
 | `PI_AGENTS_DIR` | `~/.pi/agent/agents` | Target directory for `scripts/install-agents.sh`. |
 | `PI_MODES_BASH` | `auto` | Set to `off` to skip backend detection. Ask mode then runs without bash. |
 | `PI_MODES_ASK_TOOLS` | unset | Comma-separated extra tool names to allow in ask mode. |
+| `PI_SASSY_PROFILE` | `deepseek` | Profile subagents run: the model each agent declares under that name. Overridden by the `profile` parameter, overrides `sassy.profile` in settings. |
 | `PI_SUBAGENT_CONCURRENCY` | `2` | Maximum parallel subagent processes. DeepSeek Flash handled 4; MiniMax M3.1 Flash stalled with 3. |
 | `PI_SUBAGENT_IDLE_TIMEOUT_MS` | `120000` | Kill a subagent after this many milliseconds with no stdout/stderr events. Set to `0` to disable. |
 | `PI_SUBAGENT_TELEMETRY` | `~/.pi/agent/subagent-runs.jsonl` | Telemetry JSONL path, or `0`/`off` to disable. |
+
+The subagent profile can also be set in settings, which is how a project selects a provider for everyone working in it:
+
+```json
+// <project>/.pi/settings.json
+{ "sassy": { "profile": "anthropic" } }
+```
+
+Precedence: `profile` parameter, `PI_SASSY_PROFILE`, project settings, user settings, then `deepseek`.
 
 ## Security
 
@@ -266,32 +290,37 @@ git push origin v0.3.1
 
 The workflow skips publishing if the tag's version is already on npm. A new trusted publisher must complete its first OIDC publish within 2 days of configuration, or npm expires it.
 
-## Version profiles
+## Model profiles
 
-One package, one codebase, two model profiles. The `anthropic` branch is a projection of `main`: identical extensions, agents, prompts, tools, and docs, with each agent's `model:` line pinned to an Anthropic model and a prerelease version.
+One package, one branch, several model profiles. Each agent lists the profiles it supports, and a dispatch picks one. Provider choice never lives in git history, so there is no second branch to sync and no provider-specific release.
 
-The publish workflow derives the npm dist-tag from the version, so a profile never hijacks `latest`:
+| Profile | Where it is defined | Typical selection |
+|---|---|---|
+| `deepseek` | Every agent's `profiles:` | Built-in default |
+| `anthropic` | Every agent's `profiles:` | `.pi/settings.json`, `PI_SASSY_PROFILE`, or the `profile` parameter |
 
-| Version | Branch | Dist-tag | Install |
-|---|---|---|---|
-| `0.3.25` | `main` | `latest` | `npm:@sassywares/pi-extensions@0.3.25` |
-| `0.4.0-anthropic.1` | `anthropic` | `anthropic` | `npm:@sassywares/pi-extensions@0.4.0-anthropic.1` |
+Add a profile by adding an entry to each agent you want it to apply to:
 
-Install the Anthropic profile, pinned to a version:
-
-```bash
-pi install npm:@sassywares/pi-extensions@0.4.0-anthropic.1
-./sassy-pi-extensions/scripts/install-agents.sh
+```yaml
+profiles:
+  - name: deepseek
+    model: deepseek/deepseek-flash
+    thinking: low
+  - name: anthropic
+    model: anthropic/claude-sonnet-4-5
+    thinking: low
 ```
 
-From a checkout, `git checkout anthropic && ./scripts/install-agents.sh` links the Anthropic roster in place; the symlinks follow the checkout, so switching branches swaps the models.
+`thinking` is optional and must be a real level (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`). A personal agent can still pin a single `model:` instead of listing profiles; pinning a model and listing profiles at once is rejected.
 
-The branches stay in sync: work lands on `main` first and is merged into `anthropic`, never the reverse. `scripts/check-anthropic-branch.sh` enforces it — it fails if any file outside the agents' `model:` lines and `package.json` differs from `main`, if an agent is not on an `anthropic/*` model, or if `main` has not been merged in. The workflow runs the same check for `v*-anthropic*` tags, and refuses to publish a stable version that is not on `main`.
+Run `./scripts/test-profiles.mjs` after changing discovery or any agent frontmatter. It parses the real roster plus malformed fixtures and checks the resolution order and error messages.
+
+Prereleases still get their own channel: the workflow derives the npm dist-tag from the version, so `0.4.0-beta.1` publishes under `beta` and never becomes `latest`.
 
 ## Repository maintenance
 
 - Commit changes under `extensions/` and `agents/`, and update `README.md` when behavior or configuration changes.
-- Tag releases (`v0.3.0`, `v0.3.1`, …, `v0.4.0-anthropic.1`) so installs can pin a ref. See [Releasing](#releasing) and [Version profiles](#version-profiles).
+- Tag releases (`v0.3.0`, `v0.3.1`, …, `v0.4.0`) so installs can pin a ref. See [Releasing](#releasing) and [Model profiles](#model-profiles).
 - Bump `version` in `package.json` to match the tag before pushing it.
 - `AGENTS.md` documents the workflow for agents working on this repo.
 - `CONCEPTS.md` holds the vocabulary.

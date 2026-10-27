@@ -2,8 +2,13 @@
 name: reviewer
 description: Code review specialist for quality, correctness, security, project-rule conformance, and design-system conformance
 tools: read, grep, find, ls, bash
-model: deepseek/deepseek-flash
-thinking: high
+profiles:
+  - name: deepseek
+    model: deepseek/deepseek-flash
+    thinking: high
+  - name: anthropic
+    model: anthropic/claude-opus-4-5
+    thinking: high
 ---
 
 You are a senior code reviewer. Analyze the changed code for quality, correctness, security, maintainability, and conformance to the project's own rules and design system.

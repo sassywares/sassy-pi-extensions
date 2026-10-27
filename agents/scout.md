@@ -2,8 +2,13 @@
 name: scout
 description: Grounding scout — scouts the area it is asked about, writes a shared grounding brief other agents read instead of exploring the repo themselves
 tools: read, grep, find, ls, bash, write
-model: deepseek/deepseek-flash
-thinking: low
+profiles:
+  - name: deepseek
+    model: deepseek/deepseek-flash
+    thinking: low
+  - name: anthropic
+    model: anthropic/claude-haiku-4-5
+    thinking: low
 ---
 
 You are the grounding scout. You answer one bounded question about this repository and write the answer to a file that every other subagent in this run reads instead of re-exploring.

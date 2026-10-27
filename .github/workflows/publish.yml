@@ -38,20 +38,19 @@ jobs:
             exit 1
           fi
 
-      # Stable versions ship from main; prereleases ship from their branch under their own
-      # dist-tag, so a profile like 0.4.0-anthropic never becomes `latest`.
-      - name: Resolve release channel
+      # Every release ships from main. A prerelease publishes under its own dist-tag,
+      # so 0.4.0-beta.1 can never become `latest`.
+      - name: Resolve dist-tag
         id: channel
         run: |
           version="$(node -p "require('./package.json').version")"
           git fetch --no-tags origin main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor HEAD refs/remotes/origin/main; then
+            echo "::error::release $version is not on main; tag releases from main"
+            exit 1
+          fi
           if [ "$version" = "${version%%-*}" ]; then
-            echo "channel=stable" >> "$GITHUB_OUTPUT"
             echo "dist-tag=latest" >> "$GITHUB_OUTPUT"
-            if ! git merge-base --is-ancestor HEAD refs/remotes/origin/main; then
-              echo "::error::stable release $version is not on main; tag it from main"
-              exit 1
-            fi
           else
             tag="${version#*-}"
             tag="${tag%%.*}"
@@ -59,15 +58,11 @@ jobs:
               echo "::error::cannot derive a dist-tag from version $version"
               exit 1
             fi
-            echo "channel=prerelease" >> "$GITHUB_OUTPUT"
-            echo "dist-tag=$tag" >> "$GITHUB_OUTPUT"
             if [ "$tag" = "latest" ]; then
               echo "::error::a prerelease may not publish to the latest dist-tag"
               exit 1
             fi
-            if [ "$tag" = "anthropic" ]; then
-              bash scripts/check-anthropic-branch.sh refs/remotes/origin/main
-            fi
+            echo "dist-tag=$tag" >> "$GITHUB_OUTPUT"
           fi
 
       # Allows the one-time manual bootstrap publish of a new package.

@@ -10,48 +10,27 @@ A pi package containing the Sassywares extensions and the Sassy subagent roster.
 
 This repo is the source of truth. Do not keep separate copies under `~/.pi/agent/extensions/`; pi would load both and register duplicate tools and commands. Agents are linked from `~/.pi/agent/agents/` to `agents/` by `scripts/install-agents.sh`.
 
-## Branches: `main` and `anthropic`
+## Branches: `main` only
 
-`main` is the OSS release: the Sassy roster runs on open-weight models (`deepseek/deepseek-flash`).
+`main` is the only branch and the only release line. There is no `anthropic` branch, no provider-specific branch, and no provider-specific release.
 
-`anthropic` is the same package with the same roster pinned to Anthropic models. It is a **projection of `main`, not a fork**. Extensions, agents' prompts, tools, thinking levels, scripts, workflows, and docs are byte-identical to `main`; the only permitted differences are:
+Provider choice is configuration, not a branch:
 
-1. The `model:` line in each `agents/*.md`.
-2. The `version` field in `package.json`, which carries an `-anthropic.<n>` prerelease suffix.
+- Every agent under `agents/` declares a `profiles:` list — the model choices it can run on, one entry per provider.
+- Which profile a dispatch uses is decided at run time: the `subagent` tool's `profile` parameter, then `PI_SASSY_PROFILE`, then `sassy.profile` in settings, then the built-in default `deepseek`.
+- A project that wants another provider sets it once in its own settings file:
+
+  ```json
+  { "sassy": { "profile": "anthropic" } }
+  ```
+
+  `<project>/.pi/settings.json` overrides `~/.pi/agent/settings.json`, so a project opts into Anthropic (or anything else) without touching the package.
 
 Rules:
 
-- **No work happens on `anthropic` first.** Every change lands on `main`, is released there, and is then merged into `anthropic`. Never open a PR against `anthropic`; never patch it directly.
-- **Keep them in sync.** Any time `main` changes, merge it into `anthropic` in the same session. `anthropic` must never carry commits that are not also on `main`.
-- **Model swaps are the only edits.** When adding an agent, add it to `main` with an OSS model, merge, then pin the Anthropic model on `anthropic`. Do not rewrite prompts to suit a model.
-- **`anthropic` only publishes prereleases.** Stable versions ship from `main` with the `latest` dist-tag; the branch ships `X.Y.Z-anthropic.N` under the `anthropic` dist-tag.
-
-Run the invariant check before releasing from either branch:
-
-```bash
-scripts/check-anthropic-branch.sh   # on anthropic; exits non-zero on any disallowed divergence
-```
-
-It verifies every agent pins `anthropic/*`, the version is an `-anthropic` prerelease, `main` is an ancestor of `HEAD`, and nothing outside `agents/*.md` model lines and `package.json` differs. The publish workflow runs it for `v*-anthropic*` tags and refuses the release when it fails.
-
-### Syncing `main` into `anthropic`
-
-```bash
-git checkout main && git pull --ff-only
-git checkout anthropic && git merge main
-# Only package.json (version) and agents/*.md (model lines) may conflict; resolve to both.
-./scripts/check-anthropic-branch.sh
-```
-
-Then bump the prerelease counter, commit, and release:
-
-```bash
-npm version 0.4.0-anthropic.1 --no-git-tag-version   # next counter or next base
-V=$(node -p "require('./package.json').version")
-git commit -am "chore: sync anthropic with main ($V)"
-git push origin anthropic
-git tag -a "v$V" -m "v$V" && git push origin "v$V"
-```
+- **Never reintroduce a provider branch.** Model choice belongs in `profiles:`, not in git history. A model swap is a one-line frontmatter edit on `main`.
+- **Every agent must define every profile a project may select.** A missing profile is an error naming the available ones; it is never a silent fallback to the default provider.
+- **The default stays OSS.** `DEFAULT_PROFILE` in `extensions/subagent/agents.ts` is `deepseek`; Anthropic is opt-in per project or per dispatch.
 
 ## Layout
 
@@ -71,7 +50,8 @@ sassy-pi-extensions/
 ├── agents/
 │   └── *.md
 ├── scripts/
-│   └── install-agents.sh
+│   ├── install-agents.sh
+│   └── test-profiles.mjs
 ├── .github/workflows/
 │   └── publish.yml
 ├── AGENTS.md
@@ -91,7 +71,7 @@ sassy-pi-extensions/
 | `extensions/subagent/` | The `subagent` tool and its agent discovery. |
 | `agents/*.md` | Sassy subagent definitions. Linked into `~/.pi/agent/agents/`. |
 | `scripts/install-agents.sh` | Symlinks `agents/*.md` into the user agent directory. |
-| `scripts/check-anthropic-branch.sh` | Verifies the `anthropic` branch is `main` plus model lines and a prerelease version, nothing else. |
+| `scripts/test-profiles.mjs` | Checks agent parsing and profile resolution against the real roster plus malformed fixtures. |
 | `.github/workflows/publish.yml` | Publishes to npm when a `v*` tag is pushed, choosing the dist-tag from the version. |
 | `package.json` | Pi package manifest. Lists the extensions under `pi.extensions`. |
 
@@ -121,10 +101,30 @@ pi -e ~/Documents/Workspace/Sassywares/sassy-pi-extensions
 
 ## Adding or editing an agent
 
-1. Create or edit `agents/<name>.md` with `name`, `description`, and optional `tools`, `model`, and `thinking` frontmatter.
+1. Create or edit `agents/<name>.md` with `name`, `description`, optional `tools`, and either a `profiles:` list or a pinned `model:`.
 2. Run `./scripts/install-agents.sh` once if the agent is new.
 3. Keep the body focused on the role, hard rules, and return shape.
 4. Update the agent table in `README.md`.
+
+A switchable agent declares one entry per provider. Every selectable profile must be defined, because a project that selects a missing profile gets an error, not a fallback:
+
+```yaml
+profiles:
+  - name: deepseek
+    model: deepseek/deepseek-flash
+    thinking: low
+  - name: anthropic
+    model: anthropic/claude-sonnet-4-5
+    thinking: low
+```
+
+Rules:
+
+- Profile names are lowercase letters, digits, and dashes, and must be unique within an agent.
+- `model` is always `provider/id`; `thinking` is one of `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`.
+- `profiles:` and `model:` are mutually exclusive — pinning a model and offering profiles at once is a parse error.
+- A pinned `model:` (plus optional `thinking:`) is still supported for personal agents and ignores profile selection.
+- Neither key means the agent inherits the dispatcher's model and thinking.
 
 ## Editing or removing
 
@@ -135,7 +135,7 @@ pi -e ~/Documents/Workspace/Sassywares/sassy-pi-extensions
 
 ## Version, commit, and push every extension change
 
-Any change under `extensions/` or `agents/`, or to the `pi` manifest in `package.json`, is a release-worthy change. Do it on `main`; if you are on `anthropic`, land it on `main` first and merge back. In the same turn:
+Any change under `extensions/` or `agents/`, or to the `pi` manifest in `package.json`, is a release-worthy change. It lands on `main`. In the same turn:
 
 1. Bump the patch version:
    ```bash
@@ -170,6 +170,9 @@ There is no test runner. Verify manually:
 - `/title`, `/title <text>`, automatic naming, and `PI_AUTO_TITLE=0`.
 - `/handoff <goal>` or `/handoff mode:review <goal>` opens an editable prompt; `/handoff mode:pipeline <goal>` sends it.
 - `subagent` runs a single task and a chain using `{previous}`.
+- `./scripts/test-profiles.mjs` passes; it covers agent parsing, profile precedence, and the error for a missing profile.
+- A dispatch with `profile: "anthropic"` runs the Anthropic model shown in the run line, and the same dispatch with `profile: "nope"` fails with the available profile names.
+- `PI_SASSY_PROFILE=anthropic` and `{"sassy":{"profile":"anthropic"}}` in `<project>/.pi/settings.json` both select Anthropic without a parameter.
 - `/modes` reports `sandbox-exec` or `bwrap`, and the footer badge matches.
 - The mode badge is right-aligned on its own footer line, and pi's directory/stats/model lines are unchanged.
 - In ask mode, `touch x` fails with `Operation not permitted`, while `git log` and `rg` still work.
@@ -204,7 +207,7 @@ Publishing uses npm trusted publishing (OIDC). There is no `NPM_TOKEN` secret. T
 
 OIDC cannot publish the first version of a package, because the package settings page does not exist yet. Bootstrap once with a manual publish, then configure the trusted publisher.
 
-Release checklist (stable, from `main`):
+Release checklist (from `main`):
 
 1. Bump `version` in `package.json`.
 2. Commit and push `main`.
@@ -218,17 +221,17 @@ The workflow skips publishing when the tag's version already exists on npm, so a
 
 ### Release channels (npm dist-tags)
 
-The workflow derives the dist-tag from the version, so a profile can never hijack `latest`:
+Every release ships from `main`. The workflow still derives the dist-tag from the version, so a prerelease can never hijack `latest`:
 
-| Version | Branch | Dist-tag | Install |
-|---|---|---|---|
-| `0.3.25` | `main` | `latest` | `npm:@sassywares/pi-extensions@0.3.25` |
-| `0.4.0-anthropic.1` | `anthropic` | `anthropic` | `npm:@sassywares/pi-extensions@0.4.0-anthropic.1` or `@anthropic` |
+| Version | Dist-tag | Install |
+|---|---|---|
+| `0.3.25` | `latest` | `npm:@sassywares/pi-extensions@0.3.25` |
+| `0.4.0-beta.1` | `beta` | `npm:@sassywares/pi-extensions@0.4.0-beta.1` or `@beta` |
 
 Guards in the workflow:
 
-- A stable version must be an ancestor of `main`; a stable tag pushed from `anthropic` fails the run.
-- A prerelease publishes under the dist-tag named by its identifier (`-anthropic.1` → `anthropic`) and may never use `latest`.
-- An `-anthropic*` tag also runs `scripts/check-anthropic-branch.sh` and fails if the branch has drifted from `main`.
+- The tagged commit must be an ancestor of `main`.
+- A stable version publishes to `latest`.
+- A prerelease publishes under the dist-tag named by its identifier (`-beta.1` → `beta`) and may never use `latest`.
 
-Anthropic profile releases follow the same three atomic steps, from the `anthropic` branch, with an incremented `-anthropic.N` version. Confirm them with `npm view @sassywares/pi-extensions dist-tags` rather than `npm view … version`, which reports `latest` only.
+There are no provider-specific dist-tags. Selecting Anthropic is a profile choice in settings, not an install choice.
