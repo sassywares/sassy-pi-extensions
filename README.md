@@ -4,7 +4,7 @@
 
 Sassy Pi Extensions is the Sassywares pi suite. It names each session from its first real turn, gives the agent `web_search` and `web_fetch` tools backed by Exa, carries context into a fresh session with `/handoff`, and runs bounded work in isolated subagents.
 
-The package is `@sassywares/pi-extensions`; the repo is `sassy-pi-extensions`.
+The package is `@sassywares/pi-extensions`; the repo is `sassy-pi-extensions`. The `subagent` tool ships here; the roster it dispatches — `scout`, `worker`, `reviewer`, `validator` — lives in [`sassy-agents`](https://github.com/sassywares/sassy-agents).
 
 ## Contents
 
@@ -36,27 +36,31 @@ The package is `@sassywares/pi-extensions`; the repo is `sassy-pi-extensions`.
 
 ## Quick start
 
-From a checkout (recommended — this also installs the agent definitions):
+Install the package:
+
+```bash
+pi install npm:@sassywares/pi-extensions@0.4.2
+```
+
+Or pin a ref from the repo:
+
+```bash
+pi install git:github.com/sassywares/sassy-pi-extensions@v0.4.2
+```
+
+Or load a checkout in place:
 
 ```bash
 git clone https://github.com/sassywares/sassy-pi-extensions.git
-./sassy-pi-extensions/scripts/install-agents.sh
 pi install ./sassy-pi-extensions
 ```
 
-Or install the package only:
+The `subagent` tool ships with no agents. Install the roster from [`sassy-agents`](https://github.com/sassywares/sassy-agents):
 
 ```bash
-pi install git:github.com/sassywares/sassy-pi-extensions@v0.3.0
+git clone https://github.com/sassywares/sassy-agents.git
+./sassy-agents/scripts/install.sh
 ```
-
-Or from npm once published:
-
-```bash
-pi install npm:@sassywares/pi-extensions@0.3.0
-```
-
-A package-only install loads the extensions, but `subagent` has no agents until you link or copy some into `~/.pi/agent/agents/`. Run `scripts/install-agents.sh` from a checkout to link the Sassy roster.
 
 Reload pi (`/reload`) and confirm:
 
@@ -118,18 +122,9 @@ The `subagent` tool spawns a separate `pi` process per invocation, so each task 
 - **parallel** — `{ tasks: [{ agent, task }, …] }`
 - **chain** — `{ chain: [{ agent, task }, …] }`, with `{previous}` replaced by the prior result
 
-Agent definitions are Markdown files under `~/.pi/agent/agents/` and the nearest project `.pi/agents/`. Project agents override user agents with the same name.
+Agent definitions are Markdown files under `~/.pi/agent/agents/` and the nearest project `.pi/agents/`. Project agents override user agents with the same name. This package supplies the tool and its parsing; the roster itself lives in [`sassy-agents`](https://github.com/sassywares/sassy-agents), which documents each agent's role, tools, and models, and links them into place with `scripts/install.sh`.
 
-Every agent also declares a `profiles:` list, so one roster runs on more than one provider. A dispatch picks a profile — a named model choice — and the child process starts on that profile's model.
-
-| Agent | Role | `deepseek` profile | `anthropic` profile |
-|---|---|---|---|
-| `scout` | Grounding scout: writes the shared grounding brief other agents read, including matching prior learnings from the project's `.sassywares/config.yaml` knowledge paths. | `deepseek/deepseek-flash` | `anthropic/claude-haiku-4-5` |
-| `worker` | General-purpose implementation in an isolated context. | `deepseek/deepseek-flash` | `anthropic/claude-sonnet-4-5` |
-| `reviewer` | Quality, correctness, security, project-rule, and design-system review, diff-scoped. | `deepseek/deepseek-flash` | `anthropic/claude-opus-4-5` |
-| `validator` | Checks that the diff matches the plan, independent of review. | `deepseek/deepseek-flash` | `anthropic/claude-sonnet-4-5` |
-
-Link them with `./scripts/install-agents.sh`. Edit the frontmatter to change a profile's model, thinking level, or tool allowlist.
+Every agent declares a `profiles:` list, so one roster runs on more than one provider. A dispatch picks a profile — a named model choice — and the child process starts on that profile's model.
 
 Pick a profile three ways, highest precedence first:
 
@@ -145,7 +140,7 @@ Pick a profile three ways, highest precedence first:
 
 A profile an agent does not define is an error naming the ones it does — it never falls back to the default provider. The run footer shows the model and, in parentheses, the profile it came from.
 
-Every subagent reads the same grounding brief instead of re-exploring the repo. See [GROUNDING.md](GROUNDING.md) for its location, freshness check, and wait rule.
+Every subagent reads the same grounding brief instead of re-exploring the repo. See the roster's [GROUNDING.md](https://github.com/sassywares/sassy-agents/blob/main/GROUNDING.md) for its location, freshness check, and wait rule.
 
 Parallel dispatch defaults to two concurrent subagents. A three-worker MiniMax M3.1 Flash batch showed stream stalls and request timeouts under load; DeepSeek Flash was fine with four. Raise the limit with `PI_SUBAGENT_CONCURRENCY` for a DeepSeek-only dispatch.
 
@@ -180,7 +175,6 @@ A backend is only trusted after it proves both halves of the contract: reads ins
 |---|---|---|
 | `PI_AUTO_TITLE` | unset | Set to `0` to disable automatic titles. `/title` still works. |
 | `EXA_API_KEY` | unset | Use the direct Exa API instead of the public Exa MCP endpoint. |
-| `PI_AGENTS_DIR` | `~/.pi/agent/agents` | Target directory for `scripts/install-agents.sh`. |
 | `PI_MODES_BASH` | `auto` | Set to `off` to skip backend detection. Ask mode then runs without bash. |
 | `PI_MODES_ASK_TOOLS` | unset | Comma-separated extra tool names to allow in ask mode. |
 | `PI_SASSY_PROFILE` | `deepseek` | Profile subagents run: the model each agent declares under that name. Overridden by the `profile` parameter, overrides `sassy.profile` in settings. |
@@ -226,10 +220,6 @@ sassy-pi-extensions/
 │   └── subagent/
 │       ├── agents.ts
 │       └── index.ts
-├── agents/
-│   └── *.md
-├── scripts/
-│   └── install-agents.sh
 ├── .github/workflows/
 │   └── publish.yml
 ├── AGENTS.md
@@ -242,14 +232,15 @@ sassy-pi-extensions/
 
 ## Development
 
-This repo is the source of truth for the extensions and the Sassy agents. Install it locally so pi loads the working tree directly:
+This repo is the source of truth for the extensions. Install it locally so pi loads the working tree directly:
 
 ```bash
-./scripts/install-agents.sh
 pi install ~/Documents/Workspace/Sassywares/sassy-pi-extensions
 ```
 
-Local installs are read in place — no copy, no build step. After changing an extension, run `/reload` in pi. Agent edits are picked up on the next subagent invocation.
+Local installs are read in place — no copy, no build step. After changing an extension, run `/reload` in pi.
+
+Agent definitions live in [`sassy-agents`](https://github.com/sassywares/sassy-agents); edit them there and link the roster with its `scripts/install.sh`.
 
 Do not also keep copies under `~/.pi/agent/extensions/`; pi would load both and register duplicate tools and commands.
 
@@ -266,7 +257,7 @@ Manual checks after a change:
 - `/title`, `/title <text>`, and automatic naming with `PI_AUTO_TITLE` unset.
 - `PI_AUTO_TITLE=0` starts a session without a generated title.
 - `/handoff <goal>` opens an editable prompt.
-- `subagent` with a single agent, and a chain using `{previous}`.
+- `subagent` with a single agent, and a chain using `{previous}`. The roster comes from `sassy-agents`; its own `scripts/test-profiles.mjs` covers agent parsing and profile resolution.
 
 ## Releasing
 
@@ -292,35 +283,16 @@ The workflow skips publishing if the tag's version is already on npm. A new trus
 
 ## Model profiles
 
-One package, one branch, several model profiles. Each agent lists the profiles it supports, and a dispatch picks one. Provider choice never lives in git history, so there is no second branch to sync and no provider-specific release.
+Profiles are declared by agents, not by this package. Each roster file in [`sassy-agents`](https://github.com/sassywares/sassy-agents) lists one entry per provider, and the `subagent` extension resolves the selection at dispatch time. Provider choice never lives in git history, so there is no second branch to sync and no provider-specific release.
 
-| Profile | Where it is defined | Typical selection |
-|---|---|---|
-| `deepseek` | Every agent's `profiles:` | Built-in default |
-| `anthropic` | Every agent's `profiles:` | `.pi/settings.json`, `PI_SASSY_PROFILE`, or the `profile` parameter |
-
-Add a profile by adding an entry to each agent you want it to apply to:
-
-```yaml
-profiles:
-  - name: deepseek
-    model: deepseek/deepseek-flash
-    thinking: low
-  - name: anthropic
-    model: anthropic/claude-sonnet-4-5
-    thinking: low
-```
-
-`thinking` is optional and must be a real level (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`). A personal agent can still pin a single `model:` instead of listing profiles; pinning a model and listing profiles at once is rejected.
-
-Run `./scripts/test-profiles.mjs` after changing discovery or any agent frontmatter. It parses the real roster plus malformed fixtures and checks the resolution order and error messages.
+The default is `deepseek`. A profile an agent does not define is an error naming the ones it does — never a silent fallback. Add or change a profile in the roster repo, then run its `scripts/test-profiles.mjs`, which exercises this extension's parser and resolution order against the real roster plus malformed fixtures.
 
 Prereleases still get their own channel: the workflow derives the npm dist-tag from the version, so `0.4.0-beta.1` publishes under `beta` and never becomes `latest`.
 
 ## Repository maintenance
 
-- Commit changes under `extensions/` and `agents/`, and update `README.md` when behavior or configuration changes.
-- Tag releases (`v0.3.0`, `v0.3.1`, …, `v0.4.0`) so installs can pin a ref. See [Releasing](#releasing) and [Model profiles](#model-profiles).
+- Commit changes under `extensions/`, and update `README.md` when behavior or configuration changes.
+- Tag releases (`v0.3.0`, `v0.3.1`, …, `v0.4.2`) so installs can pin a ref. See [Releasing](#releasing) and [Model profiles](#model-profiles).
 - Bump `version` in `package.json` to match the tag before pushing it.
 - `AGENTS.md` documents the workflow for agents working on this repo.
 - `CONCEPTS.md` holds the vocabulary.

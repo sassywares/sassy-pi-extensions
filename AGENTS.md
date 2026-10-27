@@ -2,13 +2,23 @@
 
 ## What this repo is
 
-A pi package containing the Sassywares extensions and the Sassy subagent roster.
+A pi package containing the Sassywares extensions.
 
 - Local: `~/Documents/Workspace/Sassywares/sassy-pi-extensions`
 - Remote: `sassywares/sassy-pi-extensions`
 - Package: `@sassywares/pi-extensions`
 
-This repo is the source of truth. Do not keep separate copies under `~/.pi/agent/extensions/`; pi would load both and register duplicate tools and commands. Agents are linked from `~/.pi/agent/agents/` to `agents/` by `scripts/install-agents.sh`.
+This repo is the source of truth for the extensions. Do not keep separate copies under `~/.pi/agent/extensions/`; pi would load both and register duplicate tools and commands.
+
+The Sassy subagent roster is not here. It lives in [`sassy-agents`](https://github.com/sassywares/sassy-agents), which links its `pi/` directory into `~/.pi/agent/agents/`. This package owns the `subagent` tool, its discovery, and profile resolution; that repo owns the agents it dispatches.
+
+The three repos split cleanly:
+
+| Repo | Owns |
+|---|---|
+| `sassy-pi-extensions` | Tools and commands: auto-title, web search, handoff, subagent, modes. |
+| `sassy-agents` | The `scout`, `worker`, `reviewer`, and `validator` definitions and their profiles. |
+| `sassy-skills` | The skills that orchestrate agents through these tools. |
 
 ## Branches: `main` only
 
@@ -16,7 +26,7 @@ This repo is the source of truth. Do not keep separate copies under `~/.pi/agent
 
 Provider choice is configuration, not a branch:
 
-- Every agent under `agents/` declares a `profiles:` list — the model choices it can run on, one entry per provider.
+- Every agent in `sassy-agents` declares a `profiles:` list — the model choices it can run on, one entry per provider.
 - Which profile a dispatch uses is decided at run time: the `subagent` tool's `profile` parameter, then `PI_SASSY_PROFILE`, then `sassy.profile` in settings, then the built-in default `deepseek`.
 - A project that wants another provider sets it once in its own settings file:
 
@@ -28,9 +38,10 @@ Provider choice is configuration, not a branch:
 
 Rules:
 
-- **Never reintroduce a provider branch.** Model choice belongs in `profiles:`, not in git history. A model swap is a one-line frontmatter edit on `main`.
-- **Every agent must define every profile a project may select.** A missing profile is an error naming the available ones; it is never a silent fallback to the default provider.
-- **The default stays OSS.** `DEFAULT_PROFILE` in `extensions/subagent/agents.ts` is `deepseek`; Anthropic is opt-in per project or per dispatch.
+- **Never reintroduce a provider branch.** Model choice belongs in agent frontmatter, not in git history.
+- **A missing profile is an error, never a fallback.** `resolveAgentModel` in `extensions/subagent/agents.ts` keeps that guarantee; do not soften it.
+- **The default stays OSS.** `DEFAULT_PROFILE` is `deepseek`; Anthropic is opt-in per project or per dispatch.
+- **Roster edits do not belong here.** Add or change an agent in `sassy-agents`.
 
 ## Layout
 
@@ -47,11 +58,6 @@ sassy-pi-extensions/
 │   └── subagent/
 │       ├── agents.ts
 │       └── index.ts
-├── agents/
-│   └── *.md
-├── scripts/
-│   ├── install-agents.sh
-│   └── test-profiles.mjs
 ├── .github/workflows/
 │   └── publish.yml
 ├── AGENTS.md
@@ -68,28 +74,30 @@ sassy-pi-extensions/
 | `extensions/web-search.ts` | `web_search` and `web_fetch` tools backed by Exa. |
 | `extensions/handoff.ts` | `/handoff` command and session replacement. |
 | `extensions/modes/` | Ask/work modes, and the read-only bash backends behind ask mode. |
-| `extensions/subagent/` | The `subagent` tool and its agent discovery. |
-| `agents/*.md` | Sassy subagent definitions. Linked into `~/.pi/agent/agents/`. |
-| `scripts/install-agents.sh` | Symlinks `agents/*.md` into the user agent directory. |
-| `scripts/test-profiles.mjs` | Checks agent parsing and profile resolution against the real roster plus malformed fixtures. |
+| `extensions/subagent/` | The `subagent` tool, agent discovery, and profile resolution. |
 | `.github/workflows/publish.yml` | Publishes to npm when a `v*` tag is pushed, choosing the dist-tag from the version. |
 | `package.json` | Pi package manifest. Lists the extensions under `pi.extensions`. |
 
 ## How to run
 
-Install the working tree as a local package and link the agents:
+Install the working tree as a local package:
 
 ```bash
-./scripts/install-agents.sh
 pi install ~/Documents/Workspace/Sassywares/sassy-pi-extensions
 ```
 
-Local installs are read in place. After an extension edit, run `/reload` in pi. Agent edits are read on the next subagent invocation.
+Local installs are read in place. After an extension edit, run `/reload` in pi.
 
 One-off load without changing settings:
 
 ```bash
 pi -e ~/Documents/Workspace/Sassywares/sassy-pi-extensions
+```
+
+To exercise `subagent` end to end you also need the roster linked:
+
+```bash
+~/Documents/Workspace/Sassywares/sassy-agents/scripts/install.sh
 ```
 
 ## Adding an extension
@@ -99,43 +107,45 @@ pi -e ~/Documents/Workspace/Sassywares/sassy-pi-extensions
 3. Document it in `README.md` under **Extensions** and **Configuration**.
 4. Run `/reload` and verify the new surface appears once.
 
-## Adding or editing an agent
+## Editing or removing
 
-1. Create or edit `agents/<name>.md` with `name`, `description`, optional `tools`, and either a `profiles:` list or a pinned `model:`.
-2. Run `./scripts/install-agents.sh` once if the agent is new.
-3. Keep the body focused on the role, hard rules, and return shape.
-4. Update the agent table in `README.md`.
+- Edit files under `extensions/`.
+- To remove an extension, delete it, remove its entry from `pi.extensions`, and update the README.
+- Do not add a build step. Pi loads TypeScript directly with jiti.
+- Do not add agents, skills, prompts, or themes to this package. Agents live in `sassy-agents`; skills live in `sassy-skills`.
 
-A switchable agent declares one entry per provider. Every selectable profile must be defined, because a project that selects a missing profile gets an error, not a fallback:
+## Agent discovery and profiles
+
+Agent parsing lives in `extensions/subagent/agents.ts`. It supports three agent shapes:
 
 ```yaml
 profiles:
   - name: deepseek
     model: deepseek/deepseek-flash
     thinking: low
-  - name: anthropic
-    model: anthropic/claude-sonnet-4-5
-    thinking: low
 ```
 
-Rules:
+```yaml
+model: openai/gpt-4o
+thinking: low
+```
+
+```yaml
+# neither: inherit the dispatcher's model and thinking
+```
+
+Rules enforced there:
 
 - Profile names are lowercase letters, digits, and dashes, and must be unique within an agent.
 - `model` is always `provider/id`; `thinking` is one of `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`.
 - `profiles:` and `model:` are mutually exclusive — pinning a model and offering profiles at once is a parse error.
-- A pinned `model:` (plus optional `thinking:`) is still supported for personal agents and ignores profile selection.
-- Neither key means the agent inherits the dispatcher's model and thinking.
+- A bad file is reported when its agent is dispatched; discovery keeps walking the directory.
 
-## Editing or removing
-
-- Edit files under `extensions/` or `agents/`.
-- To remove an extension, delete it, remove its entry from `pi.extensions`, and update the README.
-- To remove an agent, delete the file and its symlink under `~/.pi/agent/agents/`.
-- Do not add a build step. Pi loads TypeScript directly with jiti.
+The roster's own `scripts/test-profiles.mjs` in `sassy-agents` imports this parser and checks it against the real roster plus malformed fixtures. Run it after changing discovery or parsing.
 
 ## Version, commit, and push every extension change
 
-Any change under `extensions/` or `agents/`, or to the `pi` manifest in `package.json`, is a release-worthy change. It lands on `main`. In the same turn:
+Any change under `extensions/`, or to the `pi` manifest in `package.json`, is a release-worthy change. It lands on `main`. In the same turn:
 
 1. Bump the patch version:
    ```bash
@@ -158,7 +168,7 @@ Any change under `extensions/` or `agents/`, or to the `pi` manifest in `package
 
 Do this without asking for confirmation. Do not leave extension changes uncommitted, unpushed, or untagged. If any step fails, report the failure instead of continuing silently.
 
-**Tagging is mandatory, not optional.** Every version bump ships to npm, so a bumped version that is not tagged is a release that silently never happened. The tag triggers the OIDC workflow; without it, the npm package drifts behind `main` and every consumer installs a stale roster. Never bump without tagging in the same turn. See [Publishing](#publishing).
+**Tagging is mandatory, not optional.** Every version bump ships to npm, so a bumped version that is not tagged is a release that silently never happened. The tag triggers the OIDC workflow; without it, the npm package drifts behind `main` and every consumer installs a stale extension. Never bump without tagging in the same turn. See [Publishing](#publishing).
 
 ## Testing
 
@@ -169,8 +179,7 @@ There is no test runner. Verify manually:
 - `web_fetch` returns page text, and rejects `http://localhost:3000` and private IPs.
 - `/title`, `/title <text>`, automatic naming, and `PI_AUTO_TITLE=0`.
 - `/handoff <goal>` or `/handoff mode:review <goal>` opens an editable prompt; `/handoff mode:pipeline <goal>` sends it.
-- `subagent` runs a single task and a chain using `{previous}`.
-- `./scripts/test-profiles.mjs` passes; it covers agent parsing, profile precedence, and the error for a missing profile.
+- `subagent` runs a single task and a chain using `{previous}`, with the roster linked from `sassy-agents`.
 - A dispatch with `profile: "anthropic"` runs the Anthropic model shown in the run line, and the same dispatch with `profile: "nope"` fails with the available profile names.
 - `PI_SASSY_PROFILE=anthropic` and `{"sassy":{"profile":"anthropic"}}` in `<project>/.pi/settings.json` both select Anthropic without a parameter.
 - `/modes` reports `sandbox-exec` or `bwrap`, and the footer badge matches.
@@ -180,6 +189,7 @@ There is no test runner. Verify manually:
 - `alt+m` returns to work mode with the original toolset and no `[ASK MODE ACTIVE]` context left.
 - Switching ask -> work mid-session answers work on the next turn, and work -> ask answers ask.
 - Only one mode notice is present in context at a time (check with `/context` or a debug extension).
+
 ## Conventions
 
 - **Host packages are peers.** `@earendil-works/pi-coding-agent` and `typebox` stay in `peerDependencies` with `"*"`. Never put them in `dependencies`; pi supplies them.
@@ -225,8 +235,8 @@ Every release ships from `main`. The workflow still derives the dist-tag from th
 
 | Version | Dist-tag | Install |
 |---|---|---|
-| `0.3.25` | `latest` | `npm:@sassywares/pi-extensions@0.3.25` |
-| `0.4.0-beta.1` | `beta` | `npm:@sassywares/pi-extensions@0.4.0-beta.1` or `@beta` |
+| `0.4.2` | `latest` | `npm:@sassywares/pi-extensions@0.4.2` |
+| `0.5.0-beta.1` | `beta` | `npm:@sassywares/pi-extensions@0.5.0-beta.1` or `@beta` |
 
 Guards in the workflow:
 

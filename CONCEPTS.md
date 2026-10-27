@@ -46,11 +46,23 @@ The `subagent` tool. It spawns a separate `pi` process per task so each task get
 
 ## Agent
 
-A Markdown file with `name` and `description` frontmatter, plus optional `tools`, `model`, and `thinking`. The body is the system prompt. Agents are discovered from `~/.pi/agent/agents/` and the nearest project `.pi/agents/`. Project agents take precedence over user agents with the same name.
+A Markdown file with `name` and `description` frontmatter, plus optional `tools`, `model`, and `thinking`. The body is the system prompt. Agents are discovered from `~/.pi/agent/agents/` and the nearest project `.pi/agents/`. Project agents take precedence over user agents with the same name. The Sassy roster is defined and versioned in [`sassy-agents`](https://github.com/sassywares/sassy-agents), not in this package.
 
 ## Agent scope
 
-Where the `subagent` tool looks for agents: `user`, `project`, or `both`. Default is `both`. The Sassy roster is user-scoped, linked from this repo's `agents/` directory.
+Where the `subagent` tool looks for agents: `user`, `project`, or `both`. Default is `both`. The Sassy roster is user-scoped, linked from `sassy-agents/pi/` into `~/.pi/agent/agents/`.
+
+## Profile
+
+A named model choice an agent declares in frontmatter, such as `deepseek` or `anthropic`. A dispatch selects a profile; the agent's entry supplies the model and thinking level for that provider. The `subagent` extension resolves the selection and never falls back to the default when the named profile is missing.
+
+## Roster
+
+The four Sassy agents — `scout`, `worker`, `reviewer`, `validator` — and the contract that they cover a unit of work end to end. The roster lives in `sassy-agents`; this package only dispatches it.
+
+## Grounding brief
+
+One file per repo or worktree, written by `scout` and read by every other agent in the run so discovery is not repeated. The contract is documented in [`sassy-agents/GROUNDING.md`](https://github.com/sassywares/sassy-agents/blob/main/GROUNDING.md).
 
 ## Upstream derivation
 

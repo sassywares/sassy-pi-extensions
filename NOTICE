@@ -1,10 +1,12 @@
 # Notice
 
-`extensions/handoff.ts`, `extensions/subagent/`, and the agent definitions in
-`agents/` are derived from the examples and documentation of
-[pi](https://github.com/earendil-works/pi), Copyright (c) Mario Zechner and
-contributors, licensed under the MIT License.
+`extensions/handoff.ts` and `extensions/subagent/` are derived from the examples
+and documentation of [pi](https://github.com/earendil-works/pi), Copyright (c)
+Mario Zechner and contributors, licensed under the MIT License.
 
-They have been modified for the Sassywares workflow: `/handoff mode:pipeline`, the
-Sassy agent roster, and local behavior changes. See `LICENSE` for the license
-covering this repository.
+They have been modified for the Sassywares workflow: `/handoff mode:pipeline`,
+profile-based model selection, and local behavior changes. See `LICENSE` for the
+license covering this repository.
+
+The Sassy subagent roster is maintained separately in
+[`sassy-agents`](https://github.com/sassywares/sassy-agents).
