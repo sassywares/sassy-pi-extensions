@@ -135,6 +135,19 @@ export default function modesExtension(pi: ExtensionAPI): void {
 		ctx.ui.setStatus("modes", undefined);
 	}
 
+	/**
+	 * pi invalidates its own footer on a model or thinking change; a custom footer
+	 * is not in that path, so ask it to redraw explicitly. Without this the model
+	 * name and thinking level can stay stale until the next unrelated repaint.
+	 */
+	pi.on("model_select", () => {
+		footerTui?.requestRender();
+	});
+
+	pi.on("thinking_level_select", () => {
+		footerTui?.requestRender();
+	});
+
 	function describe(): string {
 		const lines = [
 			`Mode: ${mode}`,

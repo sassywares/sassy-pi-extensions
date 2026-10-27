@@ -35,11 +35,28 @@ export interface ModesFooterOptions {
 /**
  * The subset of `AgentSession` that `FooterComponent` reads. Everything except
  * a few computed values is already on the extension context.
+ *
+ * Every value is a getter, not a snapshot: `FooterComponent` reads
+ * `session.state.model` and `session.state.thinkingLevel` on each render, and
+ * `ctx` stays live for the whole session. Snapshotting here would freeze the
+ * model name and thinking level for the session, so `/model` and `/thinking`
+ * changes mid-session would never reach the footer.
  */
 function sessionShim(ctx: ExtensionContext) {
+	const state = {
+		get model() {
+			return ctx.model;
+		},
+		get thinkingLevel() {
+			return ctx.thinkingLevel;
+		},
+	};
+
 	return {
-		model: ctx.model,
-		state: { model: ctx.model, thinkingLevel: ctx.thinkingLevel },
+		get model() {
+			return ctx.model;
+		},
+		state,
 		routedModel: undefined,
 		getContextUsage: () => ctx.getContextUsage(),
 		modelRuntime: {
@@ -47,7 +64,9 @@ function sessionShim(ctx: ExtensionContext) {
 			// the only signal available.
 			isUsingSubscription: (provider: string) => provider === "kimi-coding",
 		},
-		sessionManager: ctx.sessionManager,
+		get sessionManager() {
+			return ctx.sessionManager;
+		},
 	} as unknown as ConstructorParameters<typeof FooterComponent>[0];
 }
 
