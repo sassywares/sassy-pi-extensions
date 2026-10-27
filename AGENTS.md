@@ -10,6 +10,49 @@ A pi package containing the Sassywares extensions and the Sassy subagent roster.
 
 This repo is the source of truth. Do not keep separate copies under `~/.pi/agent/extensions/`; pi would load both and register duplicate tools and commands. Agents are linked from `~/.pi/agent/agents/` to `agents/` by `scripts/install-agents.sh`.
 
+## Branches: `main` and `anthropic`
+
+`main` is the OSS release: the Sassy roster runs on open-weight models (`deepseek/deepseek-flash`).
+
+`anthropic` is the same package with the same roster pinned to Anthropic models. It is a **projection of `main`, not a fork**. Extensions, agents' prompts, tools, thinking levels, scripts, workflows, and docs are byte-identical to `main`; the only permitted differences are:
+
+1. The `model:` line in each `agents/*.md`.
+2. The `version` field in `package.json`, which carries an `-anthropic.<n>` prerelease suffix.
+
+Rules:
+
+- **No work happens on `anthropic` first.** Every change lands on `main`, is released there, and is then merged into `anthropic`. Never open a PR against `anthropic`; never patch it directly.
+- **Keep them in sync.** Any time `main` changes, merge it into `anthropic` in the same session. `anthropic` must never carry commits that are not also on `main`.
+- **Model swaps are the only edits.** When adding an agent, add it to `main` with an OSS model, merge, then pin the Anthropic model on `anthropic`. Do not rewrite prompts to suit a model.
+- **`anthropic` only publishes prereleases.** Stable versions ship from `main` with the `latest` dist-tag; the branch ships `X.Y.Z-anthropic.N` under the `anthropic` dist-tag.
+
+Run the invariant check before releasing from either branch:
+
+```bash
+scripts/check-anthropic-branch.sh   # on anthropic; exits non-zero on any disallowed divergence
+```
+
+It verifies every agent pins `anthropic/*`, the version is an `-anthropic` prerelease, `main` is an ancestor of `HEAD`, and nothing outside `agents/*.md` model lines and `package.json` differs. The publish workflow runs it for `v*-anthropic*` tags and refuses the release when it fails.
+
+### Syncing `main` into `anthropic`
+
+```bash
+git checkout main && git pull --ff-only
+git checkout anthropic && git merge main
+# Only package.json (version) and agents/*.md (model lines) may conflict; resolve to both.
+./scripts/check-anthropic-branch.sh
+```
+
+Then bump the prerelease counter, commit, and release:
+
+```bash
+npm version 0.4.0-anthropic.1 --no-git-tag-version   # next counter or next base
+V=$(node -p "require('./package.json').version")
+git commit -am "chore: sync anthropic with main ($V)"
+git push origin anthropic
+git tag -a "v$V" -m "v$V" && git push origin "v$V"
+```
+
 ## Layout
 
 ```text
@@ -48,7 +91,8 @@ sassy-pi-extensions/
 | `extensions/subagent/` | The `subagent` tool and its agent discovery. |
 | `agents/*.md` | Sassy subagent definitions. Linked into `~/.pi/agent/agents/`. |
 | `scripts/install-agents.sh` | Symlinks `agents/*.md` into the user agent directory. |
-| `.github/workflows/publish.yml` | Publishes to npm when a `v*` tag is pushed. |
+| `scripts/check-anthropic-branch.sh` | Verifies the `anthropic` branch is `main` plus model lines and a prerelease version, nothing else. |
+| `.github/workflows/publish.yml` | Publishes to npm when a `v*` tag is pushed, choosing the dist-tag from the version. |
 | `package.json` | Pi package manifest. Lists the extensions under `pi.extensions`. |
 
 ## How to run
@@ -91,7 +135,7 @@ pi -e ~/Documents/Workspace/Sassywares/sassy-pi-extensions
 
 ## Version, commit, and push every extension change
 
-Any change under `extensions/` or `agents/`, or to the `pi` manifest in `package.json`, is a release-worthy change. In the same turn:
+Any change under `extensions/` or `agents/`, or to the `pi` manifest in `package.json`, is a release-worthy change. Do it on `main`; if you are on `anthropic`, land it on `main` first and merge back. In the same turn:
 
 1. Bump the patch version:
    ```bash
@@ -160,7 +204,7 @@ Publishing uses npm trusted publishing (OIDC). There is no `NPM_TOKEN` secret. T
 
 OIDC cannot publish the first version of a package, because the package settings page does not exist yet. Bootstrap once with a manual publish, then configure the trusted publisher.
 
-Release checklist:
+Release checklist (stable, from `main`):
 
 1. Bump `version` in `package.json`.
 2. Commit and push `main`.
@@ -171,3 +215,20 @@ Release checklist:
 Treat steps 1–3 as one atomic action. If a bump is ever found untagged, tag it immediately rather than bumping again.
 
 The workflow skips publishing when the tag's version already exists on npm, so a manually published tag can be pushed safely. A new trusted publisher must complete its first OIDC publish within 2 days of being configured, or npm expires the configuration.
+
+### Release channels (npm dist-tags)
+
+The workflow derives the dist-tag from the version, so a profile can never hijack `latest`:
+
+| Version | Branch | Dist-tag | Install |
+|---|---|---|---|
+| `0.3.25` | `main` | `latest` | `npm:@sassywares/pi-extensions@0.3.25` |
+| `0.4.0-anthropic.1` | `anthropic` | `anthropic` | `npm:@sassywares/pi-extensions@0.4.0-anthropic.1` or `@anthropic` |
+
+Guards in the workflow:
+
+- A stable version must be an ancestor of `main`; a stable tag pushed from `anthropic` fails the run.
+- A prerelease publishes under the dist-tag named by its identifier (`-anthropic.1` → `anthropic`) and may never use `latest`.
+- An `-anthropic*` tag also runs `scripts/check-anthropic-branch.sh` and fails if the branch has drifted from `main`.
+
+Anthropic profile releases follow the same three atomic steps, from the `anthropic` branch, with an incremented `-anthropic.N` version. Confirm them with `npm view @sassywares/pi-extensions dist-tags` rather than `npm view … version`, which reports `latest` only.

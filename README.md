@@ -22,6 +22,7 @@ The package is `@sassywares/pi-extensions`; the repo is `sassy-pi-extensions`.
 - [Repository layout](#repository-layout)
 - [Development](#development)
 - [Releasing](#releasing)
+- [Version profiles](#version-profiles)
 - [Repository maintenance](#repository-maintenance)
 
 ## Why this suite
@@ -119,20 +120,20 @@ The `subagent` tool spawns a separate `pi` process per invocation, so each task 
 
 Agent definitions are Markdown files under `~/.pi/agent/agents/` and the nearest project `.pi/agents/`. Project agents override user agents with the same name.
 
-This repo ships the Sassy roster:
+This repo ships the Sassy roster twice: `main` runs it on open-weight models, and the `anthropic` branch runs the identical roster, prompts and tools on Anthropic models only.
 
-| Agent | Role |
-|---|---|
-| `scout` | Grounding scout: writes the shared grounding brief other agents read, including matching prior learnings from the project's `.sassywares/config.yaml` knowledge paths. |
-| `worker` | General-purpose implementation in an isolated context. |
-| `reviewer` | Quality, correctness, security, project-rule, and design-system review, diff-scoped. |
-| `validator` | Checks that the diff matches the plan, independent of review. |
+| Agent | Role | `main` | `anthropic` |
+|---|---|---|---|
+| `scout` | Grounding scout: writes the shared grounding brief other agents read, including matching prior learnings from the project's `.sassywares/config.yaml` knowledge paths. | `deepseek/deepseek-flash` | `anthropic/claude-haiku-4-5` |
+| `worker` | General-purpose implementation in an isolated context. | `deepseek/deepseek-flash` | `anthropic/claude-sonnet-4-5` |
+| `reviewer` | Quality, correctness, security, project-rule, and design-system review, diff-scoped. | `deepseek/deepseek-flash` | `anthropic/claude-opus-4-5` |
+| `validator` | Checks that the diff matches the plan, independent of review. | `deepseek/deepseek-flash` | `anthropic/claude-sonnet-4-5` |
 
 Link them with `./scripts/install-agents.sh`. Edit the frontmatter to change each agent's model, thinking level, or tool allowlist.
 
 Every subagent reads the same grounding brief instead of re-exploring the repo. See [GROUNDING.md](GROUNDING.md) for its location, freshness check, and wait rule.
 
-Parallel dispatch defaults to two concurrent subagents. A three-worker MiniMax M3.1 Flash batch showed stream stalls and request timeouts under load; DeepSeek Flash was fine with four. Raise the limit with `PI_SUBAGENT_CONCURRENCY` for a DeepSeek-only dispatch.
+Parallel dispatch defaults to two concurrent subagents. A three-worker MiniMax M3.1 Flash batch showed stream stalls and request timeouts under load; DeepSeek Flash was fine with four. Raise the limit with `PI_SUBAGENT_CONCURRENCY` for a DeepSeek-only dispatch. The `anthropic` branch is Anthropic-only, so those provider notes do not apply there.
 
 A watchdog kills a subagent when it emits no output for two minutes, which catches provider streams that hang after a partial response. Completed runs append one JSON line to `~/.pi/agent/subagent-runs.jsonl` with model, thinking level, wall time, model time, tool time, turns, error turns, retries, token usage, cost, and the watchdog outcome. Use it to compare models instead of reconstructing runs from session files.
 
@@ -265,10 +266,32 @@ git push origin v0.3.1
 
 The workflow skips publishing if the tag's version is already on npm. A new trusted publisher must complete its first OIDC publish within 2 days of configuration, or npm expires it.
 
+## Version profiles
+
+One package, one codebase, two model profiles. The `anthropic` branch is a projection of `main`: identical extensions, agents, prompts, tools, and docs, with each agent's `model:` line pinned to an Anthropic model and a prerelease version.
+
+The publish workflow derives the npm dist-tag from the version, so a profile never hijacks `latest`:
+
+| Version | Branch | Dist-tag | Install |
+|---|---|---|---|
+| `0.3.25` | `main` | `latest` | `npm:@sassywares/pi-extensions@0.3.25` |
+| `0.4.0-anthropic.1` | `anthropic` | `anthropic` | `npm:@sassywares/pi-extensions@0.4.0-anthropic.1` |
+
+Install the Anthropic profile, pinned to a version:
+
+```bash
+pi install npm:@sassywares/pi-extensions@0.4.0-anthropic.1
+./sassy-pi-extensions/scripts/install-agents.sh
+```
+
+From a checkout, `git checkout anthropic && ./scripts/install-agents.sh` links the Anthropic roster in place; the symlinks follow the checkout, so switching branches swaps the models.
+
+The branches stay in sync: work lands on `main` first and is merged into `anthropic`, never the reverse. `scripts/check-anthropic-branch.sh` enforces it — it fails if any file outside the agents' `model:` lines and `package.json` differs from `main`, if an agent is not on an `anthropic/*` model, or if `main` has not been merged in. The workflow runs the same check for `v*-anthropic*` tags, and refuses to publish a stable version that is not on `main`.
+
 ## Repository maintenance
 
 - Commit changes under `extensions/` and `agents/`, and update `README.md` when behavior or configuration changes.
-- Tag releases (`v0.3.0`, `v0.3.1`, …) so installs can pin a ref. See [Releasing](#releasing).
+- Tag releases (`v0.3.0`, `v0.3.1`, …, `v0.4.0-anthropic.1`) so installs can pin a ref. See [Releasing](#releasing) and [Version profiles](#version-profiles).
 - Bump `version` in `package.json` to match the tag before pushing it.
 - `AGENTS.md` documents the workflow for agents working on this repo.
 - `CONCEPTS.md` holds the vocabulary.
