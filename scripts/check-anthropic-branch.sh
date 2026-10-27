@@ -41,17 +41,20 @@ if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-anthropic(\.[0-9
   fail_with "version $version is not an -anthropic prerelease (expected e.g. 0.4.0-anthropic.1)"
 fi
 
-# 3. Nothing but the agents and the version may differ from main.
+# 3. Nothing but the agents and the version may differ from main. Tracked and untracked
+# working-tree changes count too, so the check is useful before a commit, not just after one.
 if ! git rev-parse --verify --quiet "$BASE" >/dev/null; then
   fail_with "base ref $BASE not found; fetch it first (git fetch origin main)"
 else
+  changed_paths="$( { git diff --name-only "$BASE"; git ls-files --others --exclude-standard; } | sort -u )"
   while IFS= read -r path; do
+    [ -n "$path" ] || continue
     case "$path" in
       agents/*.md) continue ;;
       package.json) continue ;;
     esac
     fail_with "diverges from $BASE outside agents/*.md and package.json: $path"
-  done < <(git diff --name-only "$BASE" HEAD)
+  done <<< "$changed_paths"
 
   # 4. main must already be merged in: the branch is main, not a fork of an old main.
   if ! git merge-base --is-ancestor "$BASE" HEAD; then
@@ -67,14 +70,14 @@ if git rev-parse --verify --quiet "$BASE" >/dev/null; then
       *) continue ;;
     esac
     if git cat-file -e "$BASE:$path" 2>/dev/null; then
-      changed="$(git diff "$BASE" HEAD -- "$path" | grep -E '^[+-][^+-]' | grep -vE '^[+-]model:' || true)"
+      changed="$(git diff "$BASE" -- "$path" | grep -E '^[+-][^+-]' | grep -vE '^[+-]model:' || true)"
     else
       changed="$path is new on this branch"
     fi
     if [ -n "$changed" ]; then
       fail_with "$path differs from $BASE beyond its model line"
     fi
-  done < <(git diff --name-only "$BASE" HEAD -- agents)
+  done < <(git diff --name-only "$BASE" -- agents)
 fi
 
 if [ "$fail" -ne 0 ]; then
