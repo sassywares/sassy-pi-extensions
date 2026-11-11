@@ -39,6 +39,7 @@ Provider choice is configuration, not a branch:
 Rules:
 
 - **Never reintroduce a provider branch.** Model choice belongs in agent frontmatter, not in git history.
+- **The idle watchdog never fires while a tool runs, but a tool ceiling does.** `extensions/subagent/index.ts` tracks the set of in-flight `toolCallId`s from the child's `tool_execution_start`/`tool_execution_end` events (`nextToolsInFlight`: a duplicate start is harmless, an end for an unknown id is ignored, and `turn_end` clears the set because Pi awaits every tool before ending a turn, so a missed end cannot pause the watchdog for the rest of the run) and `watchdogTimeoutFor` picks the timer: the idle timeout (`PI_SUBAGENT_IDLE_TIMEOUT_MS`, default 2 min) when the set is empty, otherwise the tool ceiling (`PI_SUBAGENT_TOOL_TIMEOUT_MS`, default 30 min, `0` disables only the ceiling). Tools do not reliably have their own timeout (Pi's bash has none by default), so the ceiling is the backstop. The ceiling starts when the first tool begins, is not reset by tool output, and clears when the last tool ends; the full idle window then restarts. Abort and kill paths are unchanged. Telemetry records `watchdogPhase` (`"idle"`, `"tool"`, or `null` when not watchdog-killed).
 - **A missing profile is an error, never a fallback.** `resolveAgentModel` in `extensions/subagent/agents.ts` keeps that guarantee; do not soften it.
 - **The default stays OSS.** `DEFAULT_PROFILE` is `deepseek`; Anthropic is opt-in per project or per dispatch.
 - **Roster edits do not belong here.** Add or change an agent in `sassy-agents`.
@@ -189,6 +190,11 @@ There is no test runner. Verify manually:
 - `alt+m` returns to work mode with the original toolset and no `[ASK MODE ACTIVE]` context left.
 - Switching ask -> work mid-session answers work on the next turn, and work -> ask answers ask.
 - Only one mode notice is present in context at a time (check with `/context` or a debug extension).
+- A subagent running bash `sleep 130` completes (the idle watchdog does not fire during a tool).
+- With `PI_SUBAGENT_IDLE_TIMEOUT_MS=5000`, a silent `sleep 10` tool completes, while a model-phase hang is still killed with the idle message.
+- With `PI_SUBAGENT_TOOL_TIMEOUT_MS=5000`, a `sleep 10` tool is killed with "Subagent tool ran for 5000ms without finishing; terminated by watchdog."
+- With `PI_SUBAGENT_IDLE_TIMEOUT_MS=0`, a subagent is never idle-killed.
+- With `PI_SUBAGENT_TOOL_TIMEOUT_MS=0`, a long silent tool (e.g. `sleep 10` under a 5s idle timeout) is not killed by the ceiling.
 
 ## Conventions
 
@@ -235,7 +241,7 @@ Every release ships from `main`. The workflow still derives the dist-tag from th
 
 | Version | Dist-tag | Install |
 |---|---|---|
-| `0.4.2` | `latest` | `npm:@sassywares/pi-extensions@0.4.2` |
+| `0.4.3` | `latest` | `npm:@sassywares/pi-extensions@0.4.3` |
 | `0.5.0-beta.1` | `beta` | `npm:@sassywares/pi-extensions@0.5.0-beta.1` or `@beta` |
 
 Guards in the workflow:

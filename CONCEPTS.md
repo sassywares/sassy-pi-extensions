@@ -44,6 +44,10 @@ The `handoff` extension. `/handoff <goal>` (or `mode:review`) asks the current m
 
 The `subagent` tool. It spawns a separate `pi` process per task so each task gets an isolated context window, then returns compact output. Modes are single, parallel, and chain. A chain replaces `{previous}` with the prior task's result.
 
+## Idle watchdog
+
+The timer that kills a subagent child after `PI_SUBAGENT_IDLE_TIMEOUT_MS` (default two minutes) of no output, to catch hung model or streaming phases. It is paused while any tool call is in flight (tracked by tool call id, cleared at each turn end); a separate tool ceiling (`PI_SUBAGENT_TOOL_TIMEOUT_MS`, default 30 minutes, not reset by tool output) bounds that phase instead, because Pi's bash has no default timeout. When the last tool ends, the full idle window restarts.
+
 ## Agent
 
 A Markdown file with `name` and `description` frontmatter, plus optional `tools`, `model`, and `thinking`. The body is the system prompt. Agents are discovered from `~/.pi/agent/agents/` and the nearest project `.pi/agents/`. Project agents take precedence over user agents with the same name. The Sassy roster is defined and versioned in [`sassy-agents`](https://github.com/sassywares/sassy-agents), not in this package.

@@ -46,8 +46,51 @@ const MAX_PARALLEL_TASKS = 8;
 // with 4; raise this with PI_SUBAGENT_CONCURRENCY for a DeepSeek-only dispatch.
 const MAX_CONCURRENCY = readNonNegativeInt(process.env.PI_SUBAGENT_CONCURRENCY, 2) || 2;
 const IDLE_TIMEOUT_MS = readNonNegativeInt(process.env.PI_SUBAGENT_IDLE_TIMEOUT_MS, 120_000);
+// Ceiling for one tool phase (while any tool is in flight). Bash has no default timeout in Pi,
+// so the idle watchdog being paused must not mean "wait forever". 0 disables only this ceiling.
+const TOOL_TIMEOUT_MS = readNonNegativeInt(process.env.PI_SUBAGENT_TOOL_TIMEOUT_MS, 1_800_000);
 const COLLAPSED_ITEM_COUNT = 10;
 const PER_TASK_OUTPUT_CAP = 50 * 1024;
+
+/**
+ * Tool call ids in flight after a child JSON event. Start adds the id (a duplicate is harmless),
+ * end removes it (an unknown id is ignored), and turn_end clears the set: Pi awaits every tool
+ * before ending its turn, so a missed end must not pause the idle watchdog for the rest of the run.
+ * Returns the same set when nothing changed.
+ */
+export function nextToolsInFlight(
+	current: ReadonlySet<string>,
+	event: { type?: unknown; toolCallId?: unknown },
+): ReadonlySet<string> {
+	const id = typeof event.toolCallId === "string" ? event.toolCallId : undefined;
+	if (event.type === "tool_execution_start" && id !== undefined) {
+		return current.has(id) ? current : new Set(current).add(id);
+	}
+	if (event.type === "tool_execution_end" && id !== undefined) {
+		if (!current.has(id)) return current;
+		const next = new Set(current);
+		next.delete(id);
+		return next;
+	}
+	if (event.type === "turn_end") return current.size === 0 ? current : new Set();
+	return current;
+}
+
+/** The idle watchdog runs only while no tool is executing. */
+export function shouldArmIdleWatchdog(toolsInFlight: number): boolean {
+	return toolsInFlight <= 0;
+}
+
+/** Which watchdog applies: the idle timeout outside tools, the tool ceiling while one runs. 0 disables that one. */
+export function watchdogTimeoutFor(
+	toolsInFlight: number,
+	idleMs: number,
+	toolMs: number,
+): { phase: "idle" | "tool"; ms: number } | undefined {
+	const phase = shouldArmIdleWatchdog(toolsInFlight) ? "idle" : "tool";
+	const ms = phase === "idle" ? idleMs : toolMs;
+	return ms > 0 ? { phase, ms } : undefined;
+}
 
 function readNonNegativeInt(value: string | undefined, fallback: number): number {
 	if (value === undefined || value.trim() === "") return fallback;
@@ -374,6 +417,7 @@ async function runSingleAgent(
 	const runStartedAt = Date.now();
 	let wasAborted = false;
 	let watchdogKilled = false;
+	let watchdogPhase: "idle" | "tool" | null = null;
 	let runError: string | undefined;
 	let modelMs = 0;
 	let toolMs = 0;
@@ -411,11 +455,14 @@ async function runSingleAgent(
 			let killRequested = false;
 			let settled = false;
 			let idleTimer: ReturnType<typeof setTimeout> | undefined;
+			let toolTimer: ReturnType<typeof setTimeout> | undefined;
+			let toolsInFlight: ReadonlySet<string> = new Set();
 
 			const settle = (code: number) => {
 				if (settled) return;
 				settled = true;
 				if (idleTimer) clearTimeout(idleTimer);
+				if (toolTimer) clearTimeout(toolTimer);
 				resolve(code);
 			};
 
@@ -431,12 +478,38 @@ async function runSingleAgent(
 			};
 
 			const armIdleTimer = () => {
-				if (IDLE_TIMEOUT_MS <= 0 || killRequested || settled) return;
+				if (killRequested || settled) return;
 				if (idleTimer) clearTimeout(idleTimer);
+				idleTimer = undefined;
+				// A running tool is silent by nature; only the separate tool ceiling applies then.
+				if (watchdogTimeoutFor(toolsInFlight.size, IDLE_TIMEOUT_MS, TOOL_TIMEOUT_MS)?.phase !== "idle") return;
 				idleTimer = setTimeout(() => {
+					if (killRequested || settled) return;
 					watchdogKilled = true;
+					watchdogPhase = "idle";
 					killProc(`Subagent idle for ${IDLE_TIMEOUT_MS}ms; terminated by watchdog.`);
 				}, IDLE_TIMEOUT_MS);
+			};
+
+			// The tool ceiling starts when the first tool begins and is cleared when the last ends.
+			// Output during the tool (including tool_execution_update) deliberately does NOT reset it:
+			// a command that streams forever is still a runaway.
+			const syncToolTimer = (previous: number) => {
+				if (killRequested || settled) return;
+				if (toolsInFlight.size === 0 && toolTimer) {
+					clearTimeout(toolTimer);
+					toolTimer = undefined;
+				}
+				if (previous === 0 && !toolTimer) {
+					const armed = watchdogTimeoutFor(toolsInFlight.size, IDLE_TIMEOUT_MS, TOOL_TIMEOUT_MS);
+					if (armed?.phase !== "tool") return;
+					toolTimer = setTimeout(() => {
+						if (killRequested || settled) return;
+						watchdogKilled = true;
+						watchdogPhase = "tool";
+						killProc(`Subagent tool ran for ${TOOL_TIMEOUT_MS}ms without finishing; terminated by watchdog.`);
+					}, armed.ms);
+				}
 			};
 
 			armIdleTimer();
@@ -448,6 +521,14 @@ async function runSingleAgent(
 					event = JSON.parse(line);
 				} catch {
 					return;
+				}
+
+				const nextInFlight = nextToolsInFlight(toolsInFlight, event);
+				if (nextInFlight !== toolsInFlight) {
+					const previousCount = toolsInFlight.size;
+					toolsInFlight = nextInFlight;
+					syncToolTimer(previousCount);
+					armIdleTimer();
 				}
 
 				if (event.type === "message_end" && event.message) {
@@ -542,6 +623,7 @@ async function runSingleAgent(
 			errors: errorTurns,
 			retries,
 			watchdogKilled,
+			watchdogPhase,
 			aborted: wasAborted,
 			durationMs: Date.now() - runStartedAt,
 			modelMs,
@@ -555,6 +637,7 @@ async function runSingleAgent(
 			contextTokens: currentResult.usage.contextTokens,
 			cost: currentResult.usage.cost,
 			idleTimeoutMs: IDLE_TIMEOUT_MS,
+			toolTimeoutMs: TOOL_TIMEOUT_MS,
 			concurrency: MAX_CONCURRENCY,
 			stderr: currentResult.stderr.trim().slice(-2000),
 		});

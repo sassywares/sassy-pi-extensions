@@ -39,13 +39,13 @@ The package is `@sassywares/pi-extensions`; the repo is `sassy-pi-extensions`. T
 Install the package:
 
 ```bash
-pi install npm:@sassywares/pi-extensions@0.4.2
+pi install npm:@sassywares/pi-extensions@0.4.3
 ```
 
 Or pin a ref from the repo:
 
 ```bash
-pi install git:github.com/sassywares/sassy-pi-extensions@v0.4.2
+pi install git:github.com/sassywares/sassy-pi-extensions@v0.4.3
 ```
 
 Or load a checkout in place:
@@ -144,7 +144,7 @@ Every subagent reads the same grounding brief instead of re-exploring the repo. 
 
 Parallel dispatch defaults to two concurrent subagents. A three-worker MiniMax M3.1 Flash batch showed stream stalls and request timeouts under load; DeepSeek Flash was fine with four. Raise the limit with `PI_SUBAGENT_CONCURRENCY` for a DeepSeek-only dispatch.
 
-A watchdog kills a subagent when it emits no output for two minutes, which catches provider streams that hang after a partial response. Completed runs append one JSON line to `~/.pi/agent/subagent-runs.jsonl` with model, profile, thinking level, wall time, model time, tool time, turns, error turns, retries, token usage, cost, and the watchdog outcome. Use it to compare models instead of reconstructing runs from session files.
+A watchdog kills a subagent when it emits no output for two minutes, which catches provider streams that hang after a partial response. It is paused while any tool is executing (tracked as the set of in-flight tool call ids from the child's `tool_execution_start` and `tool_execution_end` events, so parallel tool calls count and a turn boundary clears any missed end), because a silent tool such as a long test run is not a hang; while tools run, a separate, much longer ceiling (30 minutes) bounds the tool phase instead, since Pi's bash has no default timeout and tool output does not reset it. Once no tool is running, the full idle window restarts. Completed runs append one JSON line to `~/.pi/agent/subagent-runs.jsonl` with model, profile, thinking level, wall time, model time, tool time, turns, error turns, retries, token usage, cost, and the watchdog outcome (`watchdogKilled`, plus `watchdogPhase`: `idle`, `tool`, or `null`). Use it to compare models instead of reconstructing runs from session files.
 
 ### Modes
 
@@ -179,7 +179,8 @@ A backend is only trusted after it proves both halves of the contract: reads ins
 | `PI_MODES_ASK_TOOLS` | unset | Comma-separated extra tool names to allow in ask mode. |
 | `PI_SASSY_PROFILE` | `deepseek` | Profile subagents run: the model each agent declares under that name. Overridden by the `profile` parameter, overrides `sassy.profile` in settings. |
 | `PI_SUBAGENT_CONCURRENCY` | `2` | Maximum parallel subagent processes. DeepSeek Flash handled 4; MiniMax M3.1 Flash stalled with 3. |
-| `PI_SUBAGENT_IDLE_TIMEOUT_MS` | `120000` | Kill a subagent after this many milliseconds with no stdout/stderr events. Set to `0` to disable. |
+| `PI_SUBAGENT_IDLE_TIMEOUT_MS` | `120000` | Kill a subagent after this many milliseconds with no stdout/stderr events while no tool is executing (a running tool pauses it). Set to `0` to disable. |
+| `PI_SUBAGENT_TOOL_TIMEOUT_MS` | `1800000` | Kill a subagent when a tool phase (one or more tools in flight) runs this many milliseconds without finishing. Output during the tool does not reset it. Set to `0` to disable only this ceiling. |
 | `PI_SUBAGENT_TELEMETRY` | `~/.pi/agent/subagent-runs.jsonl` | Telemetry JSONL path, or `0`/`off` to disable. |
 
 The subagent profile can also be set in settings, which is how a project selects a provider for everyone working in it:
@@ -292,7 +293,7 @@ Prereleases still get their own channel: the workflow derives the npm dist-tag f
 ## Repository maintenance
 
 - Commit changes under `extensions/`, and update `README.md` when behavior or configuration changes.
-- Tag releases (`v0.3.0`, `v0.3.1`, …, `v0.4.2`) so installs can pin a ref. See [Releasing](#releasing) and [Model profiles](#model-profiles).
+- Tag releases (`v0.3.0`, `v0.3.1`, …, `v0.4.3`) so installs can pin a ref. See [Releasing](#releasing) and [Model profiles](#model-profiles).
 - Bump `version` in `package.json` to match the tag before pushing it.
 - `AGENTS.md` documents the workflow for agents working on this repo.
 - `CONCEPTS.md` holds the vocabulary.
