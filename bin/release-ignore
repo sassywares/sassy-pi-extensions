@@ -1,0 +1,14 @@
+# Paths that do not count as consumer-facing for the release script.
+# This replaces the script's default list, so it repeats it and adds .gitignore.
+# Consumer-facing here: extensions/, README.md, CONCEPTS.md, NOTICE, LICENSE, package.json.
+AGENTS.md
+docs/
+tests/
+.sassywares/
+.github/
+.agents/
+.claude/
+scripts/
+bin/release
+bin/release-ignore
+.gitignore

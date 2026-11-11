@@ -65,3 +65,9 @@ hooks:
     #   before_create: []
     # release/*:          # a family of heads
     #   after_merge: [notify mode:auto]
+  # Push hooks (hooks.push) run only under `commit.branch: current`, right after
+  # a successful push, keyed by the pushed branch like hooks.pr. Same entry shape.
+  # Releases here: the project skill cuts the version and tag once main is pushed.
+  push:
+    "*":
+      after_push: [sassy-pi-extensions-release]   # the push just succeeded

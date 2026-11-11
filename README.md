@@ -39,14 +39,16 @@ The package is `@sassywares/pi-extensions`; the repo is `sassy-pi-extensions`. T
 Install the package:
 
 ```bash
-pi install npm:@sassywares/pi-extensions@0.4.3
+pi install npm:@sassywares/pi-extensions
 ```
 
-Or pin a ref from the repo:
+To pin a release, append `@<version>` (`pi install npm:@sassywares/pi-extensions@<version>`), or pin a tag from the repo:
 
 ```bash
-pi install git:github.com/sassywares/sassy-pi-extensions@v0.4.3
+pi install git:github.com/sassywares/sassy-pi-extensions@v<version>
 ```
+
+Releases are listed under the repo's tags and on npm.
 
 Or load a checkout in place:
 
@@ -83,7 +85,7 @@ pi -e ./sassy-pi-extensions
 | **`web-search`** | `web_search`, `web_fetch` | Searches the web via Exa and fetches readable page text with local-address protection. |
 | **`handoff`** | `/handoff <goal>` | Summarizes the session into a continuation prompt and opens a fresh session with it in the editor for you to submit. |
 | **`subagent`** | `subagent` tool | Runs single, parallel, or chained tasks in isolated pi processes and returns compact results. |
-| **`modes`** | `alt+m`, `/ask`, `/work` | Ask mode removes the write tools and runs bash under an OS-level read-only sandbox. Work mode is pi as usual. |
+| **`modes`** | `alt+m`, `/ask`, `/work`, `/modes`, `--ask` | Ask mode removes the write tools and runs bash under an OS-level read-only sandbox. Work mode is pi as usual. |
 
 ### Auto-title
 
@@ -217,12 +219,22 @@ sassy-pi-extensions/
 │   ├── web-search.ts
 │   ├── modes/
 │   │   ├── backends.ts
+│   │   ├── footer.ts
 │   │   └── index.ts
 │   └── subagent/
 │       ├── agents.ts
 │       └── index.ts
 ├── .github/workflows/
 │   └── publish.yml
+├── .agents/skills/
+│   └── sassy-pi-extensions-release/
+│       └── SKILL.md
+├── .sassywares/
+│   ├── config.yaml
+│   └── README.md
+├── bin/
+│   ├── release
+│   └── release-ignore
 ├── AGENTS.md
 ├── CONCEPTS.md
 ├── LICENSE
@@ -273,12 +285,9 @@ A brand-new package cannot publish its first version through OIDC, because npm's
    - workflow filename: `publish.yml`
    - environment: blank
    - allowed actions: enable **npm publish** (do not leave it stage-only)
-3. Bump `version` in `package.json`, commit, then tag and push. The workflow publishes with OIDC and provenance.
+3. Push a `v<version>` tag. The workflow publishes with OIDC and provenance.
 
-```bash
-git tag -a v0.3.1 -m v0.3.1
-git push origin v0.3.1
-```
+After the bootstrap, releases are automatic: pushing consumer-facing changes to `main` through the Sassywares ship flow runs the internal release script, which bumps the patch version in `package.json`, commits `chore: release v<version>`, and pushes `main` and the tag. A minor, major, or prerelease version (for example `0.5.0-beta.1`) is written into `package.json` by hand in that commit, must be at least the highest `v*` tag on origin, and is tagged as-is by the same script. A prerelease is never auto-bumped: after it is tagged, later consumer-facing changes make the script stop until the next version is hand-set. A prerelease publishes under its own npm dist-tag (see [Model profiles](#model-profiles)). To recover from a failed run, run `bin/release` from a clean `main`; if any step fails, report it rather than continuing.
 
 The workflow skips publishing if the tag's version is already on npm. A new trusted publisher must complete its first OIDC publish within 2 days of configuration, or npm expires it.
 
@@ -292,8 +301,8 @@ Prereleases still get their own channel: the workflow derives the npm dist-tag f
 
 ## Repository maintenance
 
-- Commit changes under `extensions/`, and update `README.md` when behavior or configuration changes.
-- Tag releases (`v0.3.0`, `v0.3.1`, …, `v0.4.3`) so installs can pin a ref. See [Releasing](#releasing) and [Model profiles](#model-profiles).
-- Bump `version` in `package.json` to match the tag before pushing it.
+- Commit changes under `extensions/`, and update `README.md` in the same commit when behavior or configuration changes.
+- Releases are tagged `v<version>` by the release script, so installs can pin a ref. See [Releasing](#releasing) and [Model profiles](#model-profiles).
+- Do not edit `version` in `package.json` for a patch release; the script bumps it. Hand-edit it only for a minor, major, or prerelease.
 - `AGENTS.md` documents the workflow for agents working on this repo.
 - `CONCEPTS.md` holds the vocabulary.
